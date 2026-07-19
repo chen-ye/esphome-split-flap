@@ -244,6 +244,15 @@ void SplitFlapDisplay::loop() {
         if (this->homing_stage_2_pending_) {
           this->homing_stage_2_pending_ = false;
           
+          // Debug log magnet detection status
+          std::string magnet_status = "Magnets Detected: ";
+          for (size_t i = 0; i < this->modules_.size(); i++) {
+            if (this->modules_[i]->get_has_magnet_detected()) {
+              magnet_status += std::to_string(i) + ", ";
+            }
+          }
+          ESP_LOGD(TAG, "%s", magnet_status.c_str());
+
           // Start Stage 2 of Homing
           this->target_positions_.resize(this->modules_.size());
           this->needs_stepping_.resize(this->modules_.size());
