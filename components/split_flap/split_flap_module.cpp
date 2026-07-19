@@ -130,6 +130,8 @@ bool SplitFlapModule::read_hall_effect_sensor() {
       this->has_magnet_detected_ = true;
     }
     return magnet_present; // true = magnet is present
+  } else {
+    ESP_LOGE(TAG, "I2C ERROR reading hall effect sensor on module 0x%02X!", this->address_);
   }
   
   return false; // I2C error = assume no magnet to prevent hallucinated triggers
