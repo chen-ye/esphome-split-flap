@@ -215,7 +215,14 @@ void SplitFlapDisplay::loop() {
       for (size_t i = 0; i < this->modules_.size(); i++) {
         if (this->needs_stepping_[i]) {
           all_finished = false;
-          if (now_us - this->last_step_times_[i] >= this->time_per_step_us_) {
+          unsigned long delay_since_last_step = now_us - this->last_step_times_[i];
+
+          // Track maximum delay between steps (jitter metric)
+          if (delay_since_last_step > this->max_step_delay_us_) {
+            this->max_step_delay_us_ = delay_since_last_step;
+          }
+
+          if (delay_since_last_step >= this->time_per_step_us_) {
             this->modules_[i]->step();
             this->last_step_times_[i] = now_us;
 
@@ -241,6 +248,10 @@ void SplitFlapDisplay::loop() {
       }
 
       if (all_finished) {
+        ESP_LOGD(TAG, "Movement finished. Max step delay was %lu us (Target: %lu us)", 
+                 this->max_step_delay_us_, this->time_per_step_us_);
+        this->max_step_delay_us_ = 0; // Reset for next movement
+
         if (this->homing_stage_2_pending_) {
           this->homing_stage_2_pending_ = false;
           

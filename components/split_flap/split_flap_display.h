@@ -64,6 +64,10 @@ class SplitFlapDisplay : public Component, public text::Text {
 
   // State Machine Variables
   State state_{STATE_IDLE};
+
+  // Diagnostic tracking for loop jitter
+  unsigned long max_step_delay_us_{0};
+
   std::vector<int> target_positions_;
   std::vector<bool> needs_stepping_;
   std::vector<unsigned long> last_step_times_;
