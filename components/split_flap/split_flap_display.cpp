@@ -218,21 +218,11 @@ void SplitFlapDisplay::loop() {
           if (now_us - this->last_step_times_[i] >= this->time_per_step_us_) {
             this->modules_[i]->step();
             this->last_step_times_[i] = now_us;
-            if (this->modules_[i]->get_position() == this->target_positions_[i]) {
-              this->needs_stepping_[i] = false;
-            }
-          }
-        }
-      }
 
-      // Check hall sensors during stepping.
-      // At 400kHz, an I2C read takes ~75us. 8 modules = 600us.
-      // Polling every 2ms provides high resolution to catch the narrow magnet window,
-      // while leaving ~70% of bus time available for motor stepping.
-      if (now_us - this->last_sensor_check_time_ >= 2000) {
-        for (size_t i = 0; i < this->modules_.size(); i++) {
-          if (this->needs_stepping_[i]) {
-            bool sensor_val = this->modules_[i]->read_hall_effect_sensor(); // true if NO magnet, false if magnet
+            // Read sensor exactly once per physical step.
+            // This guarantees we never miss the magnet window (which spans ~4 steps)
+            // regardless of ESPHome main loop jitter.
+            bool sensor_val = this->modules_[i]->read_hall_effect_sensor(); // true if NO magnet
             if (sensor_val) {
               if (!this->reset_latches_[i]) {
                 this->modules_[i]->magnet_detected(); // Recalibrate spools to magnet position
@@ -242,9 +232,12 @@ void SplitFlapDisplay::loop() {
               // Sensor went low (magnet detected) - arm edge trigger
               this->reset_latches_[i] = false;
             }
+
+            if (this->modules_[i]->get_position() == this->target_positions_[i]) {
+              this->needs_stepping_[i] = false;
+            }
           }
         }
-        this->last_sensor_check_time_ = now_us;
       }
 
       if (all_finished) {
