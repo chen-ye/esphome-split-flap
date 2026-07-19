@@ -123,12 +123,6 @@ bool SplitFlapModule::read_hall_effect_sensor() {
     // The Hall effect sensor is on P17 (bit 7 of Port 1).
     // An active LOW sensor means it reads 0 when a magnet is present.
     bool magnet_present = (buffer[1] & (1u << 7)) == 0;
-    
-    // Debug every 100 reads to avoid flooding
-    static int read_count = 0;
-    if (read_count++ % 100 == 0) {
-      ESP_LOGD(TAG, "Sensor read 0x%02X: P0=0x%02X P1=0x%02X (MagnetPresent=%d)", this->address_, buffer[0], buffer[1], magnet_present ? 1 : 0);
-    }
 
     if (magnet_present && !this->has_magnet_detected_) {
       ESP_LOGD(TAG, "Magnet Detected: 0x%02X (P0=0x%02X P1=0x%02X)",
@@ -137,7 +131,7 @@ bool SplitFlapModule::read_hall_effect_sensor() {
     }
     return !magnet_present;  // true = no magnet (caller arms/fires calibration on trailing edge)
   }
-  ESP_LOGW(TAG, "Sensor read failed on module 0x%02X", this->address_);
+  // Remove ESP_LOGW here to prevent log flooding on intermittent bus errors
   return false;
 }
 

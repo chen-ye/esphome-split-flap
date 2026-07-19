@@ -227,10 +227,9 @@ void SplitFlapDisplay::loop() {
 
       // Check hall sensors during stepping.
       // At 400kHz, an I2C read takes ~75us. 8 modules = 600us.
-      // Polling every 1ms saturates the bus and disrupts stepper timing.
-      // Polling every 5ms provides enough resolution (magnet window is ~6ms at 15 RPM)
-      // while leaving plenty of CPU and bus time for smooth motor stepping.
-      if (now_us - this->last_sensor_check_time_ >= 5000) {
+      // Polling every 2ms provides high resolution to catch the narrow magnet window,
+      // while leaving ~70% of bus time available for motor stepping.
+      if (now_us - this->last_sensor_check_time_ >= 2000) {
         for (size_t i = 0; i < this->modules_.size(); i++) {
           if (this->needs_stepping_[i]) {
             bool sensor_val = this->modules_[i]->read_hall_effect_sensor(); // true if NO magnet, false if magnet
