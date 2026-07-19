@@ -184,10 +184,11 @@ void SplitFlapDisplay::stop_motors() {
 }
 
 void SplitFlapDisplay::start_movement() {
+  ESP_LOGD(TAG, "Starting movement...");
   this->hf_requester_.start();
-  this->start_motors();
   this->state_ = STATE_START_STEPS;
   this->state_timer_ = millis();
+  this->start_motors();
 }
 
 void SplitFlapDisplay::loop() {
@@ -201,6 +202,7 @@ void SplitFlapDisplay::loop() {
     case STATE_START_STEPS:
       // Allow motors 200ms settling delay to align to magnetic field
       if (now_ms - this->state_timer_ >= 200) {
+        ESP_LOGD(TAG, "Transitioning to STATE_STEPPING");
         this->state_ = STATE_STEPPING;
         this->last_sensor_check_time_ = now_us;
         for (size_t i = 0; i < this->modules_.size(); i++) {
@@ -208,7 +210,6 @@ void SplitFlapDisplay::loop() {
         }
       }
       break;
-
     case STATE_STEPPING: {
       bool all_finished = true;
       for (size_t i = 0; i < this->modules_.size(); i++) {

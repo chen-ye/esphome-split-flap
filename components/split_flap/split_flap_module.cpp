@@ -120,6 +120,13 @@ bool SplitFlapModule::read_hall_effect_sensor() {
     uint16_t input_state = (uint16_t) buffer[0] | ((uint16_t) buffer[1] << 8);
     // Bit 15 = P17 = Hall sensor output (active LOW: 0 = magnet present)
     bool magnet_present = (input_state & (1u << 15)) == 0;
+    
+    // Debug every 100 reads to avoid flooding
+    static int read_count = 0;
+    if (read_count++ % 100 == 0) {
+      ESP_LOGD(TAG, "Sensor read 0x%02X: P0=0x%02X P1=0x%02X (Bit15=%d)", this->address_, buffer[0], buffer[1], magnet_present ? 0 : 1);
+    }
+
     if (magnet_present && !this->has_magnet_detected_) {
       ESP_LOGD(TAG, "Magnet Detected: 0x%02X (P0=0x%02X P1=0x%02X)",
                this->address_, buffer[0], buffer[1]);
