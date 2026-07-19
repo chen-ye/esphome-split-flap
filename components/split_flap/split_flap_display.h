@@ -5,6 +5,8 @@
 #include "esphome/components/text/text.h"
 #include "esphome/components/i2c/i2c.h"
 #include "split_flap_module.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string>
 #include <vector>
 
@@ -13,6 +15,7 @@ namespace split_flap {
 
 enum State {
   STATE_IDLE,
+  STATE_NETWORK_COOLDOWN,
   STATE_START_STEPS,
   STATE_STEPPING,
   STATE_SETTLE,
@@ -25,7 +28,7 @@ class SplitFlapDisplay : public Component, public text::Text {
   ~SplitFlapDisplay();
 
   void setup() override;
-  void loop() override;
+  void loop() override __attribute__((hot));
   void dump_config() override;
 
   // text::Text implementation
@@ -47,6 +50,7 @@ class SplitFlapDisplay : public Component, public text::Text {
   void write_string(const std::string &input_string, float speed = -1.0f, bool centering = true);
   void home(float speed = -1.0f);
   void home_to_string(const std::string &home_string, float speed = -1.0f);
+  void step_9_test();
 
  protected:
   void start_motors();
@@ -92,8 +96,12 @@ class SplitFlapDisplay : public Component, public text::Text {
   bool homing_stage_2_pending_{false};
   std::string pending_string_;
   std::string current_displayed_text_;
+  size_t test_step_index_{1};
 
   HighFrequencyLoopRequester hf_requester_;
+
+  static void step_task_fn(void *param) __attribute__((hot));
+  TaskHandle_t step_task_handle_{nullptr};
 };
 
 // Automation Actions
@@ -133,6 +141,14 @@ class HomeToStringAction : public Action<Ts...>, public Parented<SplitFlapDispla
     auto val = this->value_.value(x...);
     float spd = this->speed_.has_value() ? this->speed_.value(x...) : -1.0f;
     this->parent_->home_to_string(val, spd);
+  }
+};
+
+template<typename... Ts>
+class Step9TestAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
+ public:
+  void play(Ts... x) override {
+    this->parent_->step_9_test();
   }
 };
 

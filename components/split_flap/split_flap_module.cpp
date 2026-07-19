@@ -62,10 +62,10 @@ int SplitFlapModule::get_step_offset() const {
 }
 
 int SplitFlapModule::get_magnet_position() const {
-  return this->base_magnet_position_ + this->get_step_offset();
+  return this->base_magnet_position_;
 }
 
-void SplitFlapModule::write_io(uint16_t data) {
+inline void __attribute__((always_inline)) SplitFlapModule::write_io(uint16_t data) {
   uint8_t buffer[2] = {(uint8_t)(data & 0xFF), (uint8_t)((data >> 8) & 0xFF)};
   auto error = this->write(buffer, 2);
   if (error != i2c::ERROR_OK && !this->has_errored_) {
@@ -123,7 +123,7 @@ void SplitFlapModule::start() {
   this->step(false);
 }
 
-void SplitFlapModule::step(bool update_position) {
+void __attribute__((hot)) SplitFlapModule::step(bool update_position) {
   uint16_t step_state;
   switch (this->step_number_) {
     case 0: step_state = 0b1111111111100111; break;

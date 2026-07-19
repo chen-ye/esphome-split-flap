@@ -9,7 +9,24 @@ button:
       - split_flap.home:
           id: split_flap_display
 
+  - platform: template
+    name: "Step Character Test"
+    on_press:
+      - split_flap.step_9_test:
+          id: split_flap_display
+
 number:
+  # =========================================================================
+  # Calibration Offset Polarity Cheatsheet:
+  # - Positive Offset (+N): Software thinks physical drum is ahead -> takes FEWER steps.
+  #   Flap stops physically HIGHER / EARLIER (counter-clockwise) in window.
+  # - Negative Offset (-N): Software thinks physical drum is behind -> takes MORE steps.
+  #   Flap stops physically LOWER / LATER (clockwise) in window.
+  #
+  # Tuning Rules:
+  # - Flap too low (needs to go UP/earlier): Increase offset (make it more positive).
+  # - Flap too high (needs to go DOWN/later): Decrease offset (make it more negative).
+  # =========================================================================
   - platform: template
     id: offset_0
     name: "Module 0 Offset"
@@ -46,7 +63,7 @@ number:
     min_value: -100
     max_value: 100
     step: 1
-    initial_value: 0
+    initial_value: -24
     optimistic: true
     restore_value: true
 
@@ -66,7 +83,7 @@ number:
     min_value: -100
     max_value: 100
     step: 1
-    initial_value: 43
+    initial_value: 34
     optimistic: true
     restore_value: true
 
@@ -86,7 +103,7 @@ number:
     min_value: -100
     max_value: 100
     step: 1
-    initial_value: -24
+    initial_value: -15
     optimistic: true
     restore_value: true
 
@@ -94,6 +111,8 @@ esp32:
   board: esp32-c3-devkitm-1
   framework:
     type: esp-idf
+    sdkconfig_options:
+      CONFIG_FREERTOS_HZ: "1000"
 
 external_components:
   - source:

@@ -24,6 +24,9 @@ void SplitFlapDisplay::setup() {
   this->current_displayed_text_ = std::string(this->modules_.size(), ' ');
   this->publish_state(this->current_displayed_text_);
 
+  // Create High-Priority Stepping Task (Priority 24) on Core 0
+  xTaskCreate(SplitFlapDisplay::step_task_fn, "SplitFlapStep", 4096, this, 24, &this->step_task_handle_);
+
   if (this->home_on_startup_) {
     this->home();
   }
@@ -101,7 +104,8 @@ void SplitFlapDisplay::write_string(const std::string &input_string, float speed
     this->modules_[i]->reset_state();
 
     char current_char = display_string[i];
-    this->target_positions_[i] = this->modules_[i]->get_char_position(current_char);
+    int char_pos = this->modules_[i]->get_char_position(current_char);
+    this->target_positions_[i] = (char_pos - this->modules_[i]->get_step_offset() + this->steps_per_rot_) % this->steps_per_rot_;
     this->calibrated_this_move_[i] = false;
     this->was_magnet_present_[i] = false;
     this->calibration_events_[i].triggered = false;
@@ -119,7 +123,9 @@ void SplitFlapDisplay::write_string(const std::string &input_string, float speed
 
   if (any_needs_stepping) {
     this->release_motors_ = true;
-    this->start_movement();
+    ESP_LOGD(TAG, "Command received. Entering network cooldown for 250ms...");
+    this->state_ = STATE_NETWORK_COOLDOWN;
+    this->state_timer_ = millis();
   } else {
     this->publish_state(this->current_displayed_text_);
   }
@@ -167,7 +173,9 @@ void SplitFlapDisplay::home(float speed) {
   this->pending_string_ = std::string(this->modules_.size(), ' ');
   this->current_displayed_text_ = std::string(this->modules_.size(), ' ');
 
-  this->start_movement();
+  ESP_LOGD(TAG, "Home command received. Entering network cooldown for 250ms...");
+  this->state_ = STATE_NETWORK_COOLDOWN;
+  this->state_timer_ = millis();
 }
 
 void SplitFlapDisplay::home_to_string(const std::string &home_string, float speed) {
@@ -215,7 +223,9 @@ void SplitFlapDisplay::home_to_string(const std::string &home_string, float spee
   }
   this->current_displayed_text_ = this->pending_string_;
 
-  this->start_movement();
+  ESP_LOGD(TAG, "HomeToString command received. Entering network cooldown for 250ms...");
+  this->state_ = STATE_NETWORK_COOLDOWN;
+  this->state_timer_ = millis();
 }
 
 void SplitFlapDisplay::start_motors() {
@@ -238,12 +248,19 @@ void SplitFlapDisplay::start_movement() {
   this->start_motors();
 }
 
-void SplitFlapDisplay::loop() {
+void __attribute__((hot)) SplitFlapDisplay::loop() {
   unsigned long now_ms = millis();
   unsigned long now_us = micros();
 
   switch (this->state_) {
     case STATE_IDLE:
+      break;
+
+    case STATE_NETWORK_COOLDOWN:
+      // Allow 250ms for network traffic and encryption processing to settle down
+      if (now_ms - this->state_timer_ >= 250) {
+        this->start_movement();
+      }
       break;
 
     case STATE_START_STEPS:
@@ -257,109 +274,8 @@ void SplitFlapDisplay::loop() {
         }
       }
       break;
-    case STATE_STEPPING: {
-      bool all_finished = true;
-      for (size_t i = 0; i < this->modules_.size(); i++) {
-        if (this->needs_stepping_[i]) {
-          all_finished = false;
-          unsigned long delay_since_last_step = now_us - this->last_step_times_[i];
-
-          // Track maximum delay between steps (jitter metric)
-          if (delay_since_last_step > this->max_step_delay_us_) {
-            this->max_step_delay_us_ = delay_since_last_step;
-          }
-
-          if (delay_since_last_step >= this->time_per_step_us_) {
-            this->modules_[i]->step();
-            this->last_step_times_[i] = now_us;
-
-            // Only read sensor if not already calibrated during this movement
-            if (!this->calibrated_this_move_[i]) {
-              bool is_magnet_present = this->modules_[i]->read_hall_effect_sensor();
-              if (is_magnet_present) {
-                this->was_magnet_present_[i] = true;
-              } else if (this->was_magnet_present_[i]) {
-                // Trailing Edge: Magnet was present, but now it is not!
-                // Record calibration details asynchronously (to be printed in cold path)
-                this->calibration_events_[i].module_index = i;
-                this->calibration_events_[i].current_pos = this->modules_[i]->get_position();
-                this->calibration_events_[i].reset_pos = this->modules_[i]->get_magnet_position();
-                this->calibration_events_[i].target_pos = this->target_positions_[i];
-                this->calibration_events_[i].triggered = true;
-
-                this->modules_[i]->magnet_detected();
-                this->calibrated_this_move_[i] = true;
-                this->was_magnet_present_[i] = false;
-              }
-            }
-
-            if (this->modules_[i]->get_position() == this->target_positions_[i]) {
-              this->needs_stepping_[i] = false;
-            }
-          }
-        }
-      }
-
-      if (all_finished) {
-        // We are now in the cold path (all active stepping has finished for this stage).
-        // Log all recorded calibration events at once to avoid timing jitter during high-frequency stepping.
-        for (const auto &event : this->calibration_events_) {
-          if (event.triggered) {
-            ESP_LOGD(TAG, "Module %zu calibrated at magnet trailing edge (current pos: %d -> reset to %d, target: %d)", 
-                     event.module_index, event.current_pos, event.reset_pos, event.target_pos);
-          }
-        }
-
-        ESP_LOGD(TAG, "Movement finished. Max step delay was %lu us (Target: %lu us)", 
-                 this->max_step_delay_us_, this->time_per_step_us_);
-        this->max_step_delay_us_ = 0; // Reset for next movement
-
-        if (this->homing_stage_2_pending_) {
-          this->homing_stage_2_pending_ = false;
-          
-          // Debug log magnet detection status
-          std::string magnet_status = "Magnets Detected: ";
-          for (size_t i = 0; i < this->modules_.size(); i++) {
-            if (this->modules_[i]->get_has_magnet_detected()) {
-              magnet_status += std::to_string(i) + ", ";
-            }
-          }
-          ESP_LOGD(TAG, "%s", magnet_status.c_str());
-
-          // Start Stage 2 of Homing
-          this->target_positions_.resize(this->modules_.size());
-          this->needs_stepping_.resize(this->modules_.size());
-          this->last_step_times_.resize(this->modules_.size());
-          this->calibrated_this_move_.resize(this->modules_.size());
-          this->was_magnet_present_.resize(this->modules_.size());
-          this->calibration_events_.clear();
-          this->calibration_events_.resize(this->modules_.size());
-
-          unsigned long current_time = micros();
-          for (size_t i = 0; i < this->modules_.size(); i++) {
-            char current_char = this->pending_string_[i];
-            this->target_positions_[i] = this->modules_[i]->get_char_position(current_char);
-            this->calibrated_this_move_[i] = false;
-            this->was_magnet_present_[i] = false;
-            this->calibration_events_[i].triggered = false;
-            this->last_step_times_[i] = current_time;
-
-            if (this->modules_[i]->get_position() != this->target_positions_[i]) {
-              this->needs_stepping_[i] = true;
-            } else {
-              this->needs_stepping_[i] = false;
-            }
-          }
-          this->release_motors_ = true;
-          this->state_ = STATE_START_STEPS;
-          this->state_timer_ = millis();
-        } else {
-          this->state_ = STATE_SETTLE;
-          this->state_timer_ = millis();
-        }
-      }
+    case STATE_STEPPING:
       break;
-    }
 
     case STATE_SETTLE:
       // Allow motors 200ms to settle to final positions
@@ -379,5 +295,127 @@ void SplitFlapDisplay::loop() {
   }
 }
 
+void __attribute__((hot)) SplitFlapDisplay::step_task_fn(void *param) {
+  SplitFlapDisplay *this_display = (SplitFlapDisplay *) param;
+  while (true) {
+    if (this_display->state_ == STATE_STEPPING) {
+      unsigned long step_start_us = micros();
+      bool all_finished = true;
+
+      // 1. Process steps for any modules that need it
+      for (size_t i = 0; i < this_display->modules_.size(); i++) {
+        if (this_display->needs_stepping_[i]) {
+          all_finished = false;
+
+          // Perform the step
+          this_display->modules_[i]->step();
+
+          // Read the sensor
+          if (!this_display->calibrated_this_move_[i]) {
+            bool is_magnet_present = this_display->modules_[i]->read_hall_effect_sensor();
+            if (is_magnet_present) {
+              this_display->was_magnet_present_[i] = true;
+            } else if (this_display->was_magnet_present_[i]) {
+              // Record trailing edge calibration event asynchronously
+              this_display->calibration_events_[i].module_index = i;
+              this_display->calibration_events_[i].current_pos = this_display->modules_[i]->get_position();
+              this_display->calibration_events_[i].reset_pos = this_display->modules_[i]->get_magnet_position();
+              this_display->calibration_events_[i].target_pos = this_display->target_positions_[i];
+              this_display->calibration_events_[i].triggered = true;
+
+              this_display->modules_[i]->magnet_detected();
+              this_display->calibrated_this_move_[i] = true;
+              this_display->was_magnet_present_[i] = false;
+            }
+          }
+
+          // Check if destination reached
+          if (this_display->modules_[i]->get_position() == this_display->target_positions_[i]) {
+            this_display->needs_stepping_[i] = false;
+          }
+        }
+      }
+
+      // 2. Handle stage completion
+      if (all_finished) {
+        // Cold-path: Log calibration events
+        for (const auto &event : this_display->calibration_events_) {
+          if (event.triggered) {
+            ESP_LOGD(TAG, "Module %zu calibrated at magnet trailing edge (current pos: %d -> reset to %d, target: %d)", 
+                     event.module_index, event.current_pos, event.reset_pos, event.target_pos);
+          }
+        }
+
+        if (this_display->homing_stage_2_pending_) {
+          this_display->homing_stage_2_pending_ = false;
+
+          // Debug log magnet detection status
+          std::string magnet_status = "Magnets Detected: ";
+          for (size_t i = 0; i < this_display->modules_.size(); i++) {
+            if (this_display->modules_[i]->get_has_magnet_detected()) {
+              magnet_status += std::to_string(i) + ", ";
+            }
+          }
+          ESP_LOGD(TAG, "%s", magnet_status.c_str());
+
+          // Start Stage 2 of Homing
+          this_display->target_positions_.resize(this_display->modules_.size());
+          this_display->needs_stepping_.resize(this_display->modules_.size());
+          this_display->last_step_times_.resize(this_display->modules_.size());
+          this_display->calibrated_this_move_.resize(this_display->modules_.size());
+          this_display->was_magnet_present_.resize(this_display->modules_.size());
+          this_display->calibration_events_.clear();
+          this_display->calibration_events_.resize(this_display->modules_.size());
+
+          unsigned long current_time = micros();
+          for (size_t i = 0; i < this_display->modules_.size(); i++) {
+            char current_char = this_display->pending_string_[i];
+            int char_pos = this_display->modules_[i]->get_char_position(current_char);
+            this_display->target_positions_[i] = (char_pos - this_display->modules_[i]->get_step_offset() + this_display->steps_per_rot_) % this_display->steps_per_rot_;
+            this_display->calibrated_this_move_[i] = false;
+            this_display->was_magnet_present_[i] = false;
+            this_display->calibration_events_[i].triggered = false;
+            this_display->last_step_times_[i] = current_time;
+
+            if (this_display->modules_[i]->get_position() != this_display->target_positions_[i]) {
+              this_display->needs_stepping_[i] = true;
+            } else {
+              this_display->needs_stepping_[i] = false;
+            }
+          }
+          this_display->release_motors_ = true;
+          this_display->state_ = STATE_START_STEPS;
+          this_display->state_timer_ = millis();
+        } else {
+          this_display->state_ = STATE_SETTLE;
+          this_display->state_timer_ = millis();
+        }
+      } else {
+        // 3. Precise wait for next step using Hybrid-Yield
+        unsigned long next_step_time = step_start_us + this_display->time_per_step_us_;
+        while (micros() < next_step_time) {
+          if (next_step_time - micros() >= 1500) {
+            vTaskDelay(pdMS_TO_TICKS(1)); // Yield 1 tick to let WiFi run
+          } else {
+            // tight loop for remaining timing fraction
+          }
+        }
+      }
+    } else {
+      // Idle or other states: Sleep 10ms to save CPU
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
+  }
+}
+
+void SplitFlapDisplay::step_9_test() {
+  if (this->charset_.empty()) return;
+  char c = this->charset_[this->test_step_index_];
+  std::string test_str(this->modules_.size(), c);
+  this->write_string(test_str, -1.0f, false);
+  this->test_step_index_ = (this->test_step_index_ + 9) % this->charset_.size();
+}
+
 }  // namespace split_flap
 }  // namespace esphome
+

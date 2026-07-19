@@ -12,6 +12,7 @@ SplitFlapDisplay = split_flap_ns.class_("SplitFlapDisplay", cg.Component, text.T
 WriteStringAction = split_flap_ns.class_("WriteStringAction", automation.Action)
 HomeAction = split_flap_ns.class_("HomeAction", automation.Action)
 HomeToStringAction = split_flap_ns.class_("HomeToStringAction", automation.Action)
+Step9TestAction = split_flap_ns.class_("Step9TestAction", automation.Action)
 
 # Configuration keys
 CONF_STEPS_PER_ROT = "steps_per_rot"
@@ -150,3 +151,20 @@ async def split_flap_home_to_string_to_code(config, action_id, template_arg, arg
         template_ = await cg.templatable(config[CONF_SPEED], args, cg.float_)
         cg.add(var.set_speed(template_))
     return var
+
+
+@automation.register_action(
+    "split_flap.step_9_test",
+    Step9TestAction,
+    cv.Schema(
+        {
+            cv.Required(CONF_ID): cv.use_id(SplitFlapDisplay),
+        }
+    ),
+    synchronous=False,
+)
+async def split_flap_step_9_test_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    return var
+

@@ -16,7 +16,7 @@ class SplitFlapModule : public i2c::I2CDevice {
   SplitFlapModule(uint8_t address, int steps_per_rotation, number::Number *offset_number, int magnet_position, const std::string &charset);
 
   void init();
-  void step(bool update_position = true);
+  void step(bool update_position = true) __attribute__((hot));
   void stop();
   void start();
 
@@ -39,7 +39,7 @@ class SplitFlapModule : public i2c::I2CDevice {
   bool get_has_magnet_detected() const { return this->has_magnet_detected_; }
 
  protected:
-  void write_io(uint16_t data);
+  inline void write_io(uint16_t data) __attribute__((always_inline));
 
   int position_ = 0;
   int step_number_ = 0;
