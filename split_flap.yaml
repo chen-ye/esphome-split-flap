@@ -34,6 +34,11 @@ wifi:
 captive_portal:
 
 external_components:
+  # - source:
+  #     type: git
+  #     url: https://github.com/chen-ye/esphome-split-flap
+  #     ref: main
+  #   components: [ split_flap ]
   - source:
       type: local
       path: components
@@ -160,9 +165,10 @@ text:
     display_offset: 0
     max_vel: 15.0
     home_on_startup: true
-    startup_string: |-
+    startup_string: |
       HELLO
       ALEX
+
 
     modules:
       - address: 0x20

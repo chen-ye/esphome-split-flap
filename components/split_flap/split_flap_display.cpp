@@ -16,14 +16,25 @@ SplitFlapDisplay::~SplitFlapDisplay() {
 void SplitFlapDisplay::set_startup_string(const std::string &startup_string) {
   this->startup_string_ = startup_string;
   this->startup_lines_.clear();
-  std::stringstream ss(startup_string);
-  std::string line;
-  while (std::getline(ss, line, '\n')) {
+  if (startup_string.empty()) {
+    return;
+  }
+  size_t start = 0;
+  size_t end = startup_string.find('\n');
+  while (end != std::string::npos) {
+    std::string line = startup_string.substr(start, end - start);
     if (!line.empty() && line.back() == '\r') {
       line.pop_back();
     }
     this->startup_lines_.push_back(line);
+    start = end + 1;
+    end = startup_string.find('\n', start);
   }
+  std::string line = startup_string.substr(start);
+  if (!line.empty() && line.back() == '\r') {
+    line.pop_back();
+  }
+  this->startup_lines_.push_back(line);
 }
 
 void SplitFlapDisplay::setup() {
