@@ -53,7 +53,7 @@ text:
     id: split_flap_display
     mode: TEXT
     steps_per_rot: 2048
-    magnet_position: 572
+    magnet_position: 615
     display_offset: 0
     max_vel: 15.0
     home_on_startup: true
@@ -65,12 +65,12 @@ text:
       - address: 0x22
         offset: 0
       - address: 0x23
-        offset: 0
+        offset: -43
       - address: 0x24
         offset: 0
       - address: 0x25
         offset: 0
       - address: 0x26
-        offset: 0
+        offset: -43
       - address: 0x27
-        offset: 0
+        offset: -43
