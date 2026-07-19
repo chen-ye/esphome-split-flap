@@ -1,0 +1,67 @@
+esphome:
+  name: splitflap
+  friendly_name: Split Flap Display
+  on_boot:
+    priority: -100
+    then:
+      - delay: 10s
+      - text.set:
+          id: split_flap_display
+          value: "HELLO"
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  frequency: 400khz
+
+logger:
+  level: DEBUG
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "SplitFlap Fallback"
+
+text:
+  - platform: split_flap
+    name: "Display Text"
+    id: split_flap_display
+    mode: TEXT
+    steps_per_rot: 2048
+    magnet_position: 730
+    display_offset: 0
+    max_vel: 15.0
+    home_on_startup: true
+    modules:
+      - address: 0x20
+        offset: 0
+      - address: 0x21
+        offset: 0
+      - address: 0x22
+        offset: 0
+      - address: 0x23
+        offset: 0
+      - address: 0x24
+        offset: 0
+      - address: 0x25
+        offset: 0
+      - address: 0x26
+        offset: 0
+      - address: 0x27
+        offset: 0
