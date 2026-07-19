@@ -117,14 +117,17 @@ bool SplitFlapModule::read_hall_effect_sensor() {
   uint8_t buffer[2] = {0, 0};
   bool ok = this->read(buffer, 2) == i2c::ERROR_OK;
   if (ok) {
-    uint16_t input_state = (uint16_t) buffer[0] | ((uint16_t) buffer[1] << 8);
-    // Bit 15 = P17 = Hall sensor output (active LOW: 0 = magnet present)
-    bool magnet_present = (input_state & (1u << 15)) == 0;
+    // For PCF8575:
+    // buffer[0] is Port 0 (P00-P07), which we use for the motor outputs.
+    // buffer[1] is Port 1 (P10-P17).
+    // The Hall effect sensor is on P17 (bit 7 of Port 1).
+    // An active LOW sensor means it reads 0 when a magnet is present.
+    bool magnet_present = (buffer[1] & (1u << 7)) == 0;
     
     // Debug every 100 reads to avoid flooding
     static int read_count = 0;
     if (read_count++ % 100 == 0) {
-      ESP_LOGD(TAG, "Sensor read 0x%02X: P0=0x%02X P1=0x%02X (Bit15=%d)", this->address_, buffer[0], buffer[1], magnet_present ? 0 : 1);
+      ESP_LOGD(TAG, "Sensor read 0x%02X: P0=0x%02X P1=0x%02X (MagnetPresent=%d)", this->address_, buffer[0], buffer[1], magnet_present ? 1 : 0);
     }
 
     if (magnet_present && !this->has_magnet_detected_) {
