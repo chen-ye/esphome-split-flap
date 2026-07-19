@@ -41,6 +41,7 @@ class SplitFlapDisplay : public Component, public text::Text {
   void set_home_on_startup(bool home_on_startup) { this->home_on_startup_ = home_on_startup; }
 
   void add_module(uint8_t address, int offset);
+  void add_module(uint8_t address, number::Number *offset_number);
 
   // Operational methods
   void write_string(const std::string &input_string, float speed = -1.0f, bool centering = true);

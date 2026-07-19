@@ -1,12 +1,6 @@
 esphome:
   name: splitflap
   friendly_name: Split Flap Display
-  on_boot:
-    priority: -100
-    then:
-      - delay: 5s
-      - split_flap.home:
-          id: split_flap_display
 
 button:
   - platform: template
@@ -14,6 +8,87 @@ button:
     on_press:
       - split_flap.home:
           id: split_flap_display
+
+number:
+  - platform: template
+    id: offset_0
+    name: "Module 0 Offset"
+    min_value: -100
+    max_value: 100
+    step: 1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: offset_1
+    name: "Module 1 Offset"
+    min_value: -100
+    max_value: 100
+    step: 1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: offset_2
+    name: "Module 2 Offset"
+    min_value: -100
+    max_value: 100
+    step: 1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: offset_3
+    name: "Module 3 Offset"
+    min_value: -100
+    max_value: 100
+    step: 1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: offset_4
+    name: "Module 4 Offset"
+    min_value: -100
+    max_value: 100
+    step: 1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: offset_5
+    name: "Module 5 Offset"
+    min_value: -100
+    max_value: 100
+    step: 1
+    initial_value: 43
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: offset_6
+    name: "Module 6 Offset"
+    min_value: -100
+    max_value: 100
+    step: 1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+  - platform: template
+    id: offset_7
+    name: "Module 7 Offset"
+    min_value: -100
+    max_value: 100
+    step: 1
+    initial_value: -24
+    optimistic: true
+    restore_value: true
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -59,18 +134,18 @@ text:
     home_on_startup: true
     modules:
       - address: 0x20
-        offset: 0
+        offset: offset_0
       - address: 0x21
-        offset: 0
+        offset: offset_1
       - address: 0x22
-        offset: 0
+        offset: offset_2
       - address: 0x23
-        offset: 0
+        offset: offset_3
       - address: 0x24
-        offset: 0
+        offset: offset_4
       - address: 0x25
-        offset: 43
+        offset: offset_5
       - address: 0x26
-        offset: 0
+        offset: offset_6
       - address: 0x27
-        offset: 60
+        offset: offset_7

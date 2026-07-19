@@ -33,6 +33,11 @@ void SplitFlapDisplay::add_module(uint8_t address, int offset) {
   this->modules_.push_back(module);
 }
 
+void SplitFlapDisplay::add_module(uint8_t address, number::Number *offset_number) {
+  auto *module = new SplitFlapModule(address, this->steps_per_rot_, offset_number, this->magnet_position_, this->charset_);
+  this->modules_.push_back(module);
+}
+
 void SplitFlapDisplay::dump_config() {
   ESP_LOGCONFIG(TAG, "Split Flap Display:");
   ESP_LOGCONFIG(TAG, "  Steps per Rotation: %d", this->steps_per_rot_);
@@ -114,6 +119,13 @@ void SplitFlapDisplay::home(float speed) {
 
   float steps_per_second = (clamped_speed / 60.0f) * this->steps_per_rot_;
   this->time_per_step_us_ = (unsigned long) (1000000.0f / steps_per_second);
+
+  // Log module offsets when starting homing
+  std::string offsets_msg = "Starting Homing. Module Offsets: ";
+  for (size_t i = 0; i < this->modules_.size(); i++) {
+    offsets_msg += std::to_string(i) + ":" + std::to_string(this->modules_[i]->get_step_offset()) + (i == this->modules_.size() - 1 ? "" : ", ");
+  }
+  ESP_LOGI(TAG, "%s", offsets_msg.c_str());
 
   this->target_positions_.resize(this->modules_.size());
   this->needs_stepping_.resize(this->modules_.size());

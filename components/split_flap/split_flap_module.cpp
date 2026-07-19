@@ -22,6 +22,8 @@ const char SplitFlapModule::ExtendedChars[48] = {
 SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, int step_offset, int magnet_position, const std::string &charset) {
   this->set_i2c_address(address);
   this->steps_per_rot_ = steps_per_rotation;
+  this->step_offset_ = step_offset;
+  this->base_magnet_position_ = magnet_position;
   this->magnet_position_ = magnet_position + step_offset;
 
   int len = charset.length();
@@ -32,6 +34,34 @@ SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, int st
     this->num_chars_ = (len >= 48) ? 48 : 37;
     this->custom_chars_ = charset.substr(0, this->num_chars_);
   }
+}
+
+SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, number::Number *offset_number, int magnet_position, const std::string &charset) {
+  this->set_i2c_address(address);
+  this->steps_per_rot_ = steps_per_rotation;
+  this->offset_number_ = offset_number;
+  this->base_magnet_position_ = magnet_position;
+  this->magnet_position_ = magnet_position; // Will be offset dynamically in getters
+
+  int len = charset.length();
+  if (len < 37) {
+    this->num_chars_ = 37;
+    this->custom_chars_ = std::string(StandardChars, 37);
+  } else {
+    this->num_chars_ = (len >= 48) ? 48 : 37;
+    this->custom_chars_ = charset.substr(0, this->num_chars_);
+  }
+}
+
+int SplitFlapModule::get_step_offset() const {
+  if (this->offset_number_ != nullptr) {
+    return (int) this->offset_number_->state;
+  }
+  return this->step_offset_;
+}
+
+int SplitFlapModule::get_magnet_position() const {
+  return this->base_magnet_position_ + this->get_step_offset();
 }
 
 void SplitFlapModule::write_io(uint16_t data) {

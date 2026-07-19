@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import text, i2c
+from esphome.components import text, i2c, number
 from esphome import automation
 from esphome.const import CONF_ID, CONF_I2C_ID, CONF_VALUE
 from . import split_flap_ns
@@ -29,7 +29,7 @@ CONF_CENTERING = "centering"
 MODULE_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_ADDRESS): cv.i2c_address,
-        cv.Optional(CONF_OFFSET, default=0): cv.int_,
+        cv.Optional(CONF_OFFSET, default=0): cv.Any(cv.int_, cv.use_id(number.Number)),
     }
 )
 
@@ -73,7 +73,12 @@ async def to_code(config):
 
     # Add each module configuration
     for module_conf in config[CONF_MODULES]:
-        cg.add(var.add_module(module_conf[CONF_ADDRESS], module_conf[CONF_OFFSET]))
+        offset = module_conf[CONF_OFFSET]
+        if isinstance(offset, int):
+            cg.add(var.add_module(module_conf[CONF_ADDRESS], offset))
+        else:
+            offset_var = await cg.get_variable(offset)
+            cg.add(var.add_module(module_conf[CONF_ADDRESS], offset_var))
 
 
 # Action Code Gen Registration
