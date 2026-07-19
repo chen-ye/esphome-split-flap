@@ -223,14 +223,14 @@ void SplitFlapDisplay::loop() {
             // This guarantees we never miss the magnet window (which spans ~4 steps)
             // regardless of ESPHome main loop jitter.
             bool is_magnet_present = this->modules_[i]->read_hall_effect_sensor();
-            if (is_magnet_present) {
+            if (!is_magnet_present) { // NO MAGNET
               if (!this->reset_latches_[i]) {
-                this->modules_[i]->magnet_detected(); // Recalibrate spools to magnet position (Leading Edge)
+                this->modules_[i]->magnet_detected(); // Recalibrate spools to magnet position (Trailing Edge, matching Arduino)
                 this->reset_latches_[i] = true;
               }
             } else {
-              // Magnet is NOT present
-              this->reset_latches_[i] = false; // Arm the latch for the next rotation
+              // Magnet IS present
+              this->reset_latches_[i] = false; // Arm the latch for when the magnet leaves
             }
 
             if (this->modules_[i]->get_position() == this->target_positions_[i]) {
