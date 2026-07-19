@@ -4,10 +4,16 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - delay: 10s
-      - text.set:
+      - delay: 5s
+      - split_flap.home:
           id: split_flap_display
-          value: "HELLO"
+
+button:
+  - platform: template
+    name: "Home Split Flap"
+    on_press:
+      - split_flap.home:
+          id: split_flap_display
 
 esp32:
   board: esp32-c3-devkitm-1
