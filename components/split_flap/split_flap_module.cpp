@@ -129,10 +129,10 @@ bool SplitFlapModule::read_hall_effect_sensor() {
                this->address_, buffer[0], buffer[1]);
       this->has_magnet_detected_ = true;
     }
-    return !magnet_present;  // true = no magnet (caller arms/fires calibration on trailing edge)
+    return magnet_present; // true = magnet is present
   }
-  // Remove ESP_LOGW here to prevent log flooding on intermittent bus errors
-  return false;
+  
+  return false; // I2C error = assume no magnet to prevent hallucinated triggers
 }
 
 }  // namespace split_flap
