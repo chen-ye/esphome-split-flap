@@ -65,12 +65,12 @@ text:
       - address: 0x22
         offset: 0
       - address: 0x23
-        offset: -43
+        offset: 0
       - address: 0x24
         offset: 0
       - address: 0x25
-        offset: 0
+        offset: 43
       - address: 0x26
-        offset: -43
+        offset: 0
       - address: 0x27
-        offset: -43
+        offset: 0
