@@ -53,7 +53,7 @@ text:
     id: split_flap_display
     mode: TEXT
     steps_per_rot: 2048
-    magnet_position: 615
+    magnet_position: 572
     display_offset: 0
     max_vel: 15.0
     home_on_startup: true
