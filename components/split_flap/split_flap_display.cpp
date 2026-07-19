@@ -18,6 +18,7 @@ void SplitFlapDisplay::setup() {
   for (auto *module : this->modules_) {
     module->set_i2c_bus(this->bus_);
     module->init();
+    module->update_cached_offset();
   }
 
   this->current_displayed_text_ = std::string(this->modules_.size(), ' ');
@@ -66,7 +67,13 @@ void SplitFlapDisplay::write_string(const std::string &input_string, float speed
   float steps_per_second = (clamped_speed / 60.0f) * this->steps_per_rot_;
   this->time_per_step_us_ = (unsigned long) (1000000.0f / steps_per_second);
 
-  std::string display_string = input_string.substr(0, this->modules_.size());
+  // Convert input to uppercase for case-insensitivity
+  std::string upper_input = input_string;
+  for (char &c : upper_input) {
+    c = std::toupper(c);
+  }
+
+  std::string display_string = upper_input.substr(0, this->modules_.size());
   if (centering) {
     int total_padding = this->modules_.size() - display_string.length();
     int padding_left = total_padding / 2;
@@ -81,15 +88,23 @@ void SplitFlapDisplay::write_string(const std::string &input_string, float speed
   this->target_positions_.resize(this->modules_.size());
   this->needs_stepping_.resize(this->modules_.size());
   this->last_step_times_.resize(this->modules_.size());
-  this->reset_latches_.resize(this->modules_.size());
+  this->calibrated_this_move_.resize(this->modules_.size());
+  this->was_magnet_present_.resize(this->modules_.size());
+  this->calibration_events_.clear();
+  this->calibration_events_.resize(this->modules_.size());
 
   unsigned long current_time = micros();
   bool any_needs_stepping = false;
 
   for (size_t i = 0; i < this->modules_.size(); i++) {
+    this->modules_[i]->update_cached_offset();
+    this->modules_[i]->reset_state();
+
     char current_char = display_string[i];
     this->target_positions_[i] = this->modules_[i]->get_char_position(current_char);
-    this->reset_latches_[i] = true;
+    this->calibrated_this_move_[i] = false;
+    this->was_magnet_present_[i] = false;
+    this->calibration_events_[i].triggered = false;
     this->last_step_times_[i] = current_time;
 
     if (this->modules_[i]->get_position() != this->target_positions_[i]) {
@@ -123,6 +138,7 @@ void SplitFlapDisplay::home(float speed) {
   // Log module offsets when starting homing
   std::string offsets_msg = "Starting Homing. Module Offsets: ";
   for (size_t i = 0; i < this->modules_.size(); i++) {
+    this->modules_[i]->update_cached_offset();
     offsets_msg += std::to_string(i) + ":" + std::to_string(this->modules_[i]->get_step_offset()) + (i == this->modules_.size() - 1 ? "" : ", ");
   }
   ESP_LOGI(TAG, "%s", offsets_msg.c_str());
@@ -130,12 +146,18 @@ void SplitFlapDisplay::home(float speed) {
   this->target_positions_.resize(this->modules_.size());
   this->needs_stepping_.resize(this->modules_.size());
   this->last_step_times_.resize(this->modules_.size());
-  this->reset_latches_.resize(this->modules_.size());
+  this->calibrated_this_move_.resize(this->modules_.size());
+  this->was_magnet_present_.resize(this->modules_.size());
+  this->calibration_events_.clear();
+  this->calibration_events_.resize(this->modules_.size());
 
   unsigned long current_time = micros();
   for (size_t i = 0; i < this->modules_.size(); i++) {
+    this->modules_[i]->reset_state();
     this->target_positions_[i] = (this->modules_[i]->get_position() - 1 + this->steps_per_rot_) % this->steps_per_rot_;
-    this->reset_latches_[i] = true;
+    this->calibrated_this_move_[i] = false;
+    this->was_magnet_present_[i] = false;
+    this->calibration_events_[i].triggered = false;
     this->last_step_times_[i] = current_time;
     this->needs_stepping_[i] = true; // force all modules to run calibration rotation
   }
@@ -161,12 +183,19 @@ void SplitFlapDisplay::home_to_string(const std::string &home_string, float spee
   this->target_positions_.resize(this->modules_.size());
   this->needs_stepping_.resize(this->modules_.size());
   this->last_step_times_.resize(this->modules_.size());
-  this->reset_latches_.resize(this->modules_.size());
+  this->calibrated_this_move_.resize(this->modules_.size());
+  this->was_magnet_present_.resize(this->modules_.size());
+  this->calibration_events_.clear();
+  this->calibration_events_.resize(this->modules_.size());
 
   unsigned long current_time = micros();
   for (size_t i = 0; i < this->modules_.size(); i++) {
+    this->modules_[i]->update_cached_offset();
+    this->modules_[i]->reset_state();
     this->target_positions_[i] = (this->modules_[i]->get_position() - 1 + this->steps_per_rot_) % this->steps_per_rot_;
-    this->reset_latches_[i] = true;
+    this->calibrated_this_move_[i] = false;
+    this->was_magnet_present_[i] = false;
+    this->calibration_events_[i].triggered = false;
     this->last_step_times_[i] = current_time;
     this->needs_stepping_[i] = true;
   }
@@ -174,7 +203,13 @@ void SplitFlapDisplay::home_to_string(const std::string &home_string, float spee
   this->release_motors_ = false;
   this->homing_stage_2_pending_ = true;
 
-  this->pending_string_ = home_string.substr(0, this->modules_.size());
+  // Convert home_string to uppercase for case-insensitivity
+  std::string upper_home = home_string;
+  for (char &c : upper_home) {
+    c = std::toupper(c);
+  }
+
+  this->pending_string_ = upper_home.substr(0, this->modules_.size());
   while (this->pending_string_.length() < this->modules_.size()) {
     this->pending_string_ += ' ';
   }
@@ -238,18 +273,24 @@ void SplitFlapDisplay::loop() {
             this->modules_[i]->step();
             this->last_step_times_[i] = now_us;
 
-            // Read sensor exactly once per physical step.
-            // This guarantees we never miss the magnet window (which spans ~4 steps)
-            // regardless of ESPHome main loop jitter.
-            bool is_magnet_present = this->modules_[i]->read_hall_effect_sensor();
-            if (!is_magnet_present) { // NO MAGNET
-              if (!this->reset_latches_[i]) {
-                this->modules_[i]->magnet_detected(); // Recalibrate spools to magnet position (Trailing Edge, matching Arduino)
-                this->reset_latches_[i] = true;
+            // Only read sensor if not already calibrated during this movement
+            if (!this->calibrated_this_move_[i]) {
+              bool is_magnet_present = this->modules_[i]->read_hall_effect_sensor();
+              if (is_magnet_present) {
+                this->was_magnet_present_[i] = true;
+              } else if (this->was_magnet_present_[i]) {
+                // Trailing Edge: Magnet was present, but now it is not!
+                // Record calibration details asynchronously (to be printed in cold path)
+                this->calibration_events_[i].module_index = i;
+                this->calibration_events_[i].current_pos = this->modules_[i]->get_position();
+                this->calibration_events_[i].reset_pos = this->modules_[i]->get_magnet_position();
+                this->calibration_events_[i].target_pos = this->target_positions_[i];
+                this->calibration_events_[i].triggered = true;
+
+                this->modules_[i]->magnet_detected();
+                this->calibrated_this_move_[i] = true;
+                this->was_magnet_present_[i] = false;
               }
-            } else {
-              // Magnet IS present
-              this->reset_latches_[i] = false; // Arm the latch for when the magnet leaves
             }
 
             if (this->modules_[i]->get_position() == this->target_positions_[i]) {
@@ -260,6 +301,15 @@ void SplitFlapDisplay::loop() {
       }
 
       if (all_finished) {
+        // We are now in the cold path (all active stepping has finished for this stage).
+        // Log all recorded calibration events at once to avoid timing jitter during high-frequency stepping.
+        for (const auto &event : this->calibration_events_) {
+          if (event.triggered) {
+            ESP_LOGD(TAG, "Module %zu calibrated at magnet trailing edge (current pos: %d -> reset to %d, target: %d)", 
+                     event.module_index, event.current_pos, event.reset_pos, event.target_pos);
+          }
+        }
+
         ESP_LOGD(TAG, "Movement finished. Max step delay was %lu us (Target: %lu us)", 
                  this->max_step_delay_us_, this->time_per_step_us_);
         this->max_step_delay_us_ = 0; // Reset for next movement
@@ -280,13 +330,18 @@ void SplitFlapDisplay::loop() {
           this->target_positions_.resize(this->modules_.size());
           this->needs_stepping_.resize(this->modules_.size());
           this->last_step_times_.resize(this->modules_.size());
-          this->reset_latches_.resize(this->modules_.size());
+          this->calibrated_this_move_.resize(this->modules_.size());
+          this->was_magnet_present_.resize(this->modules_.size());
+          this->calibration_events_.clear();
+          this->calibration_events_.resize(this->modules_.size());
 
           unsigned long current_time = micros();
           for (size_t i = 0; i < this->modules_.size(); i++) {
             char current_char = this->pending_string_[i];
             this->target_positions_[i] = this->modules_[i]->get_char_position(current_char);
-            this->reset_latches_[i] = true;
+            this->calibrated_this_move_[i] = false;
+            this->was_magnet_present_[i] = false;
+            this->calibration_events_[i].triggered = false;
             this->last_step_times_[i] = current_time;
 
             if (this->modules_[i]->get_position() != this->target_positions_[i]) {

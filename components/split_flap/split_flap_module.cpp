@@ -24,7 +24,6 @@ SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, int st
   this->steps_per_rot_ = steps_per_rotation;
   this->step_offset_ = step_offset;
   this->base_magnet_position_ = magnet_position;
-  this->magnet_position_ = magnet_position + step_offset;
 
   int len = charset.length();
   if (len < 37) {
@@ -41,7 +40,6 @@ SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, number
   this->steps_per_rot_ = steps_per_rotation;
   this->offset_number_ = offset_number;
   this->base_magnet_position_ = magnet_position;
-  this->magnet_position_ = magnet_position; // Will be offset dynamically in getters
 
   int len = charset.length();
   if (len < 37) {
@@ -53,10 +51,13 @@ SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, number
   }
 }
 
-int SplitFlapModule::get_step_offset() const {
-  if (this->offset_number_ != nullptr) {
-    return (int) this->offset_number_->state;
+void SplitFlapModule::update_cached_offset() {
+  if (this->offset_number_ != nullptr && !std::isnan(this->offset_number_->state)) {
+    this->step_offset_ = (int) this->offset_number_->state;
   }
+}
+
+int SplitFlapModule::get_step_offset() const {
   return this->step_offset_;
 }
 
@@ -154,10 +155,10 @@ bool SplitFlapModule::read_hall_effect_sensor() {
     // An active LOW sensor means it reads 0 when a magnet is present.
     bool magnet_present = (buffer[1] & (1u << 7)) == 0;
 
-    if (magnet_present && !this->has_magnet_detected_) {
-      ESP_LOGD(TAG, "Magnet Detected: 0x%02X (P0=0x%02X P1=0x%02X)",
-               this->address_, buffer[0], buffer[1]);
+    if (magnet_present) {
       this->has_magnet_detected_ = true;
+    } else {
+      this->has_magnet_detected_ = false;
     }
     return magnet_present; // true = magnet is present
   } else {

@@ -22,6 +22,7 @@ class SplitFlapModule : public i2c::I2CDevice {
 
   int get_magnet_position() const;
   int get_step_offset() const;
+  void update_cached_offset();
   int get_char_position(char input_char);
   int get_position() const { return this->position_; }
   int get_charset_size() const { return this->num_chars_; }
@@ -29,6 +30,10 @@ class SplitFlapModule : public i2c::I2CDevice {
 
   bool read_hall_effect_sensor();
   void magnet_detected() { this->position_ = this->get_magnet_position(); }
+
+  void reset_state() {
+    this->has_magnet_detected_ = false;
+  }
 
   bool get_has_errored() const { return this->has_errored_; }
   bool get_has_magnet_detected() const { return this->has_magnet_detected_; }
@@ -42,7 +47,6 @@ class SplitFlapModule : public i2c::I2CDevice {
   bool has_errored_ = false;
   bool has_magnet_detected_ = false;
   int base_magnet_position_ = 730;
-  int magnet_position_ = 730;
   int step_offset_ = 0;
   number::Number *offset_number_{nullptr};
 

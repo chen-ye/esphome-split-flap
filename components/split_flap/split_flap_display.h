@@ -72,7 +72,18 @@ class SplitFlapDisplay : public Component, public text::Text {
   std::vector<int> target_positions_;
   std::vector<bool> needs_stepping_;
   std::vector<unsigned long> last_step_times_;
-  std::vector<bool> reset_latches_;
+  std::vector<bool> calibrated_this_move_;
+  std::vector<bool> was_magnet_present_;
+
+  struct CalibrationEvent {
+    size_t module_index;
+    int current_pos;
+    int reset_pos;
+    int target_pos;
+    bool triggered;
+  };
+  std::vector<CalibrationEvent> calibration_events_;
+
   unsigned long last_sensor_check_time_{0};
   unsigned long state_timer_{0};
   float current_speed_{15.0f};
