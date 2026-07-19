@@ -42,13 +42,14 @@ class SplitFlapDisplay : public Component, public text::Text {
   void set_max_vel(float max_vel) { this->max_vel_ = max_vel; }
   void set_charset(const std::string &charset) { this->charset_ = charset; }
   void set_home_on_startup(bool home_on_startup) { this->home_on_startup_ = home_on_startup; }
+  void set_startup_string(const std::string &startup_string);
 
   void add_module(uint8_t address, int offset);
   void add_module(uint8_t address, number::Number *offset_number);
 
   // Operational methods
   void write_string(const std::string &input_string, float speed = -1.0f, bool centering = true);
-  void home(float speed = -1.0f);
+  void home(float speed = -1.0f, bool use_startup_string = false);
   void home_to_string(const std::string &home_string, float speed = -1.0f);
   void step_9_test();
 
@@ -64,6 +65,9 @@ class SplitFlapDisplay : public Component, public text::Text {
   float max_vel_{15.0f};
   std::string charset_{" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789':/?!.->$#%"};
   bool home_on_startup_{true};
+  std::string startup_string_{""};
+  std::vector<std::string> startup_lines_;
+  size_t startup_line_idx_{0};
 
   std::vector<SplitFlapModule *> modules_;
 

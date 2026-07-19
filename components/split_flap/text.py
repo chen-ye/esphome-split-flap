@@ -21,6 +21,7 @@ CONF_DISPLAY_OFFSET = "display_offset"
 CONF_MAX_VEL = "max_vel"
 CONF_CHARSET = "charset"
 CONF_HOME_ON_STARTUP = "home_on_startup"
+CONF_STARTUP_STRING = "startup_string"
 CONF_MODULES = "modules"
 CONF_OFFSET = "offset"
 CONF_ADDRESS = "address"
@@ -48,6 +49,7 @@ CONFIG_SCHEMA = (
                 CONF_CHARSET, default=" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789':/?!.->$#%"
             ): cv.string,
             cv.Optional(CONF_HOME_ON_STARTUP, default=True): cv.boolean,
+            cv.Optional(CONF_STARTUP_STRING, default=""): cv.string,
             cv.Required(CONF_MODULES): cv.ensure_list(MODULE_SCHEMA),
         }
     )
@@ -71,6 +73,7 @@ async def to_code(config):
     cg.add(var.set_max_vel(config[CONF_MAX_VEL]))
     cg.add(var.set_charset(config[CONF_CHARSET]))
     cg.add(var.set_home_on_startup(config[CONF_HOME_ON_STARTUP]))
+    cg.add(var.set_startup_string(config[CONF_STARTUP_STRING]))
 
     # Add each module configuration
     for module_conf in config[CONF_MODULES]:

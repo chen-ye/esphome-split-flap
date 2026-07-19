@@ -1,7 +1,7 @@
 #include "split_flap_display.h"
 #include "esphome/core/log.h"
 #include <algorithm>
-
+#include <sstream>
 namespace esphome {
 namespace split_flap {
 
@@ -10,6 +10,19 @@ static const char *const TAG = "split_flap.display";
 SplitFlapDisplay::~SplitFlapDisplay() {
   for (auto *module : this->modules_) {
     delete module;
+  }
+}
+
+void SplitFlapDisplay::set_startup_string(const std::string &startup_string) {
+  this->startup_string_ = startup_string;
+  this->startup_lines_.clear();
+  std::stringstream ss(startup_string);
+  std::string line;
+  while (std::getline(ss, line, '\n')) {
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+    this->startup_lines_.push_back(line);
   }
 }
 
@@ -27,8 +40,9 @@ void SplitFlapDisplay::setup() {
   // Create High-Priority Stepping Task (Priority 24) on Core 0
   xTaskCreate(SplitFlapDisplay::step_task_fn, "SplitFlapStep", 4096, this, 24, &this->step_task_handle_);
 
+  this->state_timer_ = millis();
   if (this->home_on_startup_) {
-    this->home();
+    this->home(-1.0f, true);
   }
 }
 
@@ -131,7 +145,7 @@ void SplitFlapDisplay::write_string(const std::string &input_string, float speed
   }
 }
 
-void SplitFlapDisplay::home(float speed) {
+void SplitFlapDisplay::home(float speed, bool use_startup_string) {
   if (speed < 0) {
     speed = this->max_vel_;
   }
@@ -170,8 +184,24 @@ void SplitFlapDisplay::home(float speed) {
 
   this->release_motors_ = false; // keep coils energized between stage 1 and stage 2
   this->homing_stage_2_pending_ = true;
-  this->pending_string_ = std::string(this->modules_.size(), ' ');
-  this->current_displayed_text_ = std::string(this->modules_.size(), ' ');
+  
+  if (use_startup_string && !this->startup_lines_.empty()) {
+    this->startup_line_idx_ = 0;
+    std::string first_line = this->startup_lines_[this->startup_line_idx_++];
+    for (char &c : first_line) {
+      c = std::toupper(c);
+    }
+    if (first_line.length() > this->modules_.size()) {
+      first_line = first_line.substr(0, this->modules_.size());
+    }
+    int total_padding = this->modules_.size() - first_line.length();
+    int padding_left = total_padding / 2;
+    int padding_right = total_padding - padding_left;
+    this->pending_string_ = std::string(padding_left, ' ') + first_line + std::string(padding_right, ' ');
+  } else {
+    this->pending_string_ = std::string(this->modules_.size(), ' ');
+  }
+  this->current_displayed_text_ = this->pending_string_;
 
   ESP_LOGD(TAG, "Home command received. Entering network cooldown for 250ms...");
   this->state_ = STATE_NETWORK_COOLDOWN;
@@ -254,6 +284,12 @@ void __attribute__((hot)) SplitFlapDisplay::loop() {
 
   switch (this->state_) {
     case STATE_IDLE:
+      if (this->startup_line_idx_ < this->startup_lines_.size()) {
+        if (now_ms - this->state_timer_ >= 2000) {
+          ESP_LOGD(TAG, "Displaying startup sequence line %d: %s", (int) this->startup_line_idx_, this->startup_lines_[this->startup_line_idx_].c_str());
+          this->write_string(this->startup_lines_[this->startup_line_idx_++], -1.0f, true);
+        }
+      }
       break;
 
     case STATE_NETWORK_COOLDOWN:
@@ -289,6 +325,7 @@ void __attribute__((hot)) SplitFlapDisplay::loop() {
         this->stop_motors();
       }
       this->state_ = STATE_IDLE;
+      this->state_timer_ = millis();
       this->hf_requester_.stop();
       this->publish_state(this->current_displayed_text_);
       break;
