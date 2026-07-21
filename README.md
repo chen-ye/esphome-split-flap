@@ -4,14 +4,6 @@ An ESPHome custom component for driving the modular 3D-printed split-flap displa
 
 It supports multi-module configurations using **PCF8575 I/O expanders** over I2C, features high-performance motor stepping using a dedicated FreeRTOS task, and supports real-time calibration offsets mapped to ESPHome `number` entities.
 
-## Hardware Architecture
-
-See [here](https://drewferg11.github.io/Split-Flap-Display/module-boards/custom-pcb/dowjames-v5.1/) for more info.
-
-- **Multi-Module I2C Control**: Drive multiple split-flap modules (typically 1 to 8) using a single I2C bus via cheap PCF8575 16-port I/O expanders.
-- **Precise Stepper Control**: Coils are driven through pins `P01-P04` of the PCF8575 (via ULN2003 or similar Darlington array).
-- **Hall Effect Sensor Homing**: Uses an active-low Hall effect sensor on pin `P17` (bit 15) to detect the drum's magnet for homing and trailing-edge calibration.
-
 ## Firmware Architecture
 
 - **Dedicated FreeRTOS Task**: Runs motor stepping sequences in a high-priority task (Priority 24) on Core 0 with hybrid busy-wait/yielding, mitigating timing jitter caused by ESPHome's main loop and WiFi network stack.
@@ -19,6 +11,8 @@ See [here](https://drewferg11.github.io/Split-Flap-Display/module-boards/custom-
 - **Startup Display Sequences**: Supports multi-line startup strings displayed sequentially during boot.
 
 ## Hardware Configuration & Wiring
+
+See [here](https://drewferg11.github.io/Split-Flap-Display/resources/) for more info .
 
 Each split-flap module uses a PCF8575 expander connected to the shared I2C bus (`SDA`/`SCL`). The PCF8575 pins are mapped as follows:
 
