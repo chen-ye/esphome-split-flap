@@ -11,7 +11,7 @@ esp32:
 
 # Enable logging
 logger:
-  baud_rate: 115200 # Disable logging with baud_rate: 0 when running a ToF or DHT sensor on a v1 board otherwise set to 115200 (faster logging improves response time)
+  baud_rate: 115200 # Disable logging with baud_rate: 0. This may improve performance/accuracy
 
 # Enable Home Assistant API
 api:
