@@ -1,6 +1,6 @@
 # ESPHome Split-Flap Display Component
 
-An ESPHome custom component for driving the modular 3D-printed split-flap displays originally designed by [Morgan Manly](https://github.com/ManlyMorgan/Split-Flap-Display) and [expanded upon](https://drewferg11.github.io/Split-Flap-Display/) by community members.
+An ESPHome custom component for driving the excellent modular 3D-printed split-flap displays originally designed by [Morgan Manly](https://github.com/ManlyMorgan/Split-Flap-Display) and [expanded upon](https://drewferg11.github.io/Split-Flap-Display/) by community members.
 
 It supports multi-module configurations using **PCF8575 I/O expanders** over I2C, features high-performance motor stepping using a dedicated FreeRTOS task, and supports real-time calibration offsets mapped to ESPHome `number` entities.
 
@@ -21,14 +21,31 @@ Each split-flap module uses a PCF8575 expander connected to the shared I2C bus (
 | **P01 - P04** (Bits 1 - 4) | Stepper Motor Phases | Connected to the stepper driver inputs (e.g., ULN2003) |
 | **P17** (Bit 15) | Hall Effect Sensor | Input pin with internal pull-up. Connected to the sensor output (Active LOW) |
 
-## Installation
-
-Add this custom component to your ESPHome configuration file using the `external_components` block.
+## Firmware Installation & Configuration
 
 > [!NOTE]
 > Since stepper accuracy and precision is influenced by CPU load, you will likely want to run this on a dedicated board.
 
-### Local Installation
+### Example Configuration
+
+A complete example configuration is available in the [`esphome-splitflap.yaml`](esphome-splitflap.yaml) file. To use it'll you'll need to declare the following varaibles in your `secrets.yaml` file:
+
+```yaml
+wifi_ssid: [YOUR_WIFI_SSID]
+wifi_password: [YOUR_WIFI_PASSWORD]
+home_assistant_key: [YOUR_HOME_ASSISTANT_KEY]
+ota_password: [YOUR_OTA_PASSWORD]
+```
+
+Deploy to your device using `esphome run esphome-splitflap.yaml`, or install via the ESPHome dashboard by using the "Install from Folder" option.
+
+### Configuration Details
+
+#### Component Installation
+
+Add this custom component to your ESPHome configuration file using the `external_components` block.
+
+##### Local Installation
 
 If you clone or download this repository locally into your ESPHome configuration directory:
 
@@ -40,7 +57,7 @@ external_components:
     components: [ split_flap ]
 ```
 
-### Git Installation
+##### Git Installation
 
 Or source it directly from GitHub:
 
@@ -53,11 +70,7 @@ external_components:
     components: [ split_flap ]
 ```
 
----
-
-## Configuration Reference
-
-### Split-Flap Text Platform
+#### Split-Flap Text Platform
 
 The component exposes itself as an ESPHome `text` component platform.
 
@@ -90,7 +103,7 @@ text:
         offset: offset_1
 ```
 
-#### Configuration Variables
+#### Config Variables
 
 - **name** (**Required**, string): The name of the text entity in Home Assistant.
 - **id** (**Required**, ID): The ID of the component to reference in actions and scripts.
@@ -107,9 +120,7 @@ text:
   - **address** (**Required**, I2C address): The I2C address of the PCF8575 for this module (e.g., `0x20`).
   - **offset** (*Optional*, integer or template number ID): The calibration offset for this module. Referencing an ESPHome `number` entity allows you to dynamically change offsets via the UI without rebuilding the firmware. Defaults to `0`.
 
----
-
-## Calibration Offset Tuning Guide
+## Calibration Offset Tuning
 
 Because of physical tolerances and magnet placements, each module will require slight step calibration to ensure flaps align perfectly flat in the window.
 
@@ -135,8 +146,6 @@ Use the following cheatsheet to calibrate your modules:
 | **Flap too low/shows next character** | Drum needs to stop **earlier** (counter-clockwise) | **Increase the offset** (make it more positive). |
 | **Flap too high/shows previous character** | Drum needs to stop **later** (clockwise) | **Decrease the offset** (make it more negative). |
 
----
-
 ## Action Reference
 
 You can control the display inside ESPHome automations using the following custom actions:
@@ -159,8 +168,6 @@ on_press:
 - **speed** (*Optional*, float, templatable): Driving speed in RPM. If omitted, uses `max_vel`.
 - **centering** (*Optional*, boolean, templatable): Whether to center-align the text on the display. Defaults to `true`. If `false`, text is left-aligned and padded with spaces on the right.
 
----
-
 ### `split_flap.home`
 
 Forces all modules to perform their homing sequence (re-synchronize zero position using Hall effect sensors).
@@ -175,8 +182,6 @@ on_press:
 - **id** (**Required**, ID): The ID of the split-flap display.
 - **speed** (*Optional*, float, templatable): The homing speed in RPM.
 
----
-
 ### `split_flap.home_to_string`
 
 Homes all modules and immediately displays the target string after homing is complete, holding coil power engaged between stage 1 (homing) and stage 2 (movement) to prevent slippage.
@@ -189,8 +194,6 @@ on_press:
       speed: 12.0
 ```
 
----
-
 ### `split_flap.step_9_test`
 
 A diagnostic helper that steps all modules forward in the character set by 9 characters at a time. Useful for finding mechanical sticking points or stepper motor coil slippage.
@@ -200,19 +203,3 @@ on_press:
   - split_flap.step_9_test:
       id: split_flap_display
 ```
-
----
-
-## Example Configuration
-
-A complete example configuration is available in the [`esphome-splitflap.yaml`](esphome-splitflap.yaml) file. To use it'll you'll need to declare the following varaibles in your `secrets.yaml` file:
-
-```yaml
-wifi_ssid: [YOUR_WIFI_SSID]
-wifi_password: [YOUR_WIFI_PASSWORD]
-home_assistant_key: [YOUR_HOME_ASSISTANT_KEY]
-ota_password: [YOUR_OTA_PASSWORD]
-
-```
-
-Deploy to your device using `esphome run esphome-splitflap.yaml`, or install via the ESPHome dashboard by using the "Install from Folder" option.
