@@ -10,6 +10,39 @@ It supports multi-module configurations using **PCF8575 I/O expanders** over I2C
 - **Real-Time Offset Calibration**: Link each module's offset to an ESPHome `number` entity, enabling runtime fine-tuning from Home Assistant.
 - **Startup Display Sequences**: Supports multi-line startup strings displayed sequentially during boot.
 
+### Display State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> STATE_IDLE
+
+    STATE_IDLE --> STATE_NETWORK_COOLDOWN: write_string / home / home_to_string
+    STATE_IDLE --> STATE_NETWORK_COOLDOWN: Startup string line trigger (2s interval)
+
+    state "STATE_NETWORK_COOLDOWN<br/>(250ms Delay)" as STATE_NETWORK_COOLDOWN
+    STATE_NETWORK_COOLDOWN --> STATE_START_STEPS: Network cooldown complete
+
+    state "STATE_START_STEPS<br/>(200ms Alignment)" as STATE_START_STEPS
+    STATE_START_STEPS --> STATE_STEPPING: Motors energized & rotor aligned
+
+    state "STATE_STEPPING<br/>(FreeRTOS Stepping Task)" as STATE_STEPPING
+    STATE_STEPPING --> STATE_START_STEPS: Stage 1 (Homing) complete<br/>(Prepare Stage 2 Target String)
+    STATE_STEPPING --> STATE_SETTLE: All modules reached target positions
+
+    state "STATE_SETTLE<br/>(200ms Mechanical Settle)" as STATE_SETTLE
+    STATE_SETTLE --> STATE_STOPPING: Settlement delay complete
+
+    state "STATE_STOPPING<br/>(De-energize & Publish)" as STATE_STOPPING
+    STATE_STOPPING --> STATE_IDLE: Motors released & state published
+```
+
+- **`STATE_IDLE`**: The default resting state when no motor movement is taking place. If multi-line `startup_string` text is configured, this state periodically triggers the display of the next line (at 2-second intervals).
+- **`STATE_NETWORK_COOLDOWN`**: A 250ms buffer delay entered immediately after receiving a display or homing command. This gives the ESP32 network stack (WiFi, mDNS, and Home Assistant API encryption) time to settle before high-frequency motor stepping starts.
+- **`STATE_START_STEPS`**: A 200ms delay that energizes the stepper motor coils to align the physical rotors to the magnetic field phase before stepping starts.
+- **`STATE_STEPPING`**: The active movement state managed by a high-priority FreeRTOS task (Priority 24) on Core 0. The task steps modules toward target positions and polls Hall effect sensors for zero-position calibration at the magnet trailing edge. During homing, completing Stage 1 (finding the magnet) transitions back to `STATE_START_STEPS` to execute Stage 2 (moving to the target character).
+- **`STATE_SETTLE`**: A 200ms settling pause after stepping finishes to allow the physical flaps and drum mechanisms to come to a complete rest.
+- **`STATE_STOPPING`**: De-energizes the motor coils (if configured to release), stops high-frequency loop requests, and publishes the final text state to Home Assistant before returning to `STATE_IDLE`.
+
 ## Hardware Configuration & Wiring
 
 See [here](https://drewferg11.github.io/Split-Flap-Display/resources/) for more info .
