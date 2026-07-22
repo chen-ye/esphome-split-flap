@@ -4,59 +4,6 @@ An ESPHome custom component for driving the excellent modular 3D-printed split-f
 
 It supports multi-module configurations using **PCF8575 I/O expanders** over I2C, features high-performance motor stepping using a dedicated FreeRTOS task, and supports real-time calibration offsets mapped to ESPHome `number` entities.
 
-## Firmware Architecture
-
-- **Dedicated FreeRTOS Task**: Runs motor stepping sequences in a high-priority task (Priority 24) on Core 0 with hybrid busy-wait/yielding, mitigating timing jitter caused by ESPHome's main loop and WiFi network stack.
-- **Real-Time Offset Calibration**: Link each module's offset to an ESPHome `number` entity, enabling runtime fine-tuning from Home Assistant.
-- **Startup Display Sequences**: Supports multi-line startup strings displayed sequentially during boot.
-
-### Display State Machine
-
-```mermaid
-stateDiagram-v2
-    [*] --> STATE_IDLE
-
-    STATE_IDLE --> STATE_NETWORK_COOLDOWN: write_string / home / home_to_string
-    STATE_IDLE --> STATE_NETWORK_COOLDOWN: Startup string line trigger (2s interval)
-
-    state "STATE_NETWORK_COOLDOWN<br/>(250ms Delay)" as STATE_NETWORK_COOLDOWN
-    STATE_NETWORK_COOLDOWN --> STATE_START_STEPS: Network cooldown complete
-
-    state "STATE_START_STEPS<br/>(200ms Alignment)" as STATE_START_STEPS
-    STATE_START_STEPS --> STATE_STEPPING: Motors energized & rotor aligned
-
-    state "STATE_STEPPING<br/>(FreeRTOS Stepping Task)" as STATE_STEPPING
-    STATE_STEPPING --> STATE_START_STEPS: Stage 1 (Homing) complete<br/>(Prepare Stage 2 Target String)
-    STATE_STEPPING --> STATE_SETTLE: All modules reached target positions
-
-    state "STATE_SETTLE<br/>(200ms Mechanical Settle)" as STATE_SETTLE
-    STATE_SETTLE --> STATE_STOPPING: Settle delay complete
-
-    state "STATE_STOPPING<br/>(De-energize & Publish)" as STATE_STOPPING
-    STATE_STOPPING --> STATE_IDLE: Motors released & state published
-```
-
-- **`STATE_IDLE`**: The default resting state when no motor movement is taking place. If multi-line `startup_string` text is configured, this state periodically triggers the display of the next line (at 2-second intervals).
-- **`STATE_NETWORK_COOLDOWN`**: A 250ms buffer delay entered immediately after receiving a display or homing command. This gives the ESP32 network stack (WiFi, mDNS, and Home Assistant API encryption) time to settle before high-frequency motor stepping starts.
-- **`STATE_START_STEPS`**: A 200ms delay that energizes the stepper motor coils to align the physical rotors to the magnetic field phase before stepping starts.
-- **`STATE_STEPPING`**: The active movement state managed by a high-priority FreeRTOS task (Priority 24) on Core 0. The task steps modules toward target positions and polls Hall effect sensors for zero-position calibration at the magnet trailing edge. During homing, completing Stage 1 (finding the magnet) transitions back to `STATE_START_STEPS` to execute Stage 2 (moving to the target character).
-- **`STATE_SETTLE`**: A 200ms settling pause after stepping finishes to allow the physical flaps and drum mechanisms to come to a complete rest.
-- **`STATE_STOPPING`**: De-energizes the motor coils (if configured to release), stops high-frequency loop requests, and publishes the final text state to Home Assistant before returning to `STATE_IDLE`.
-
-### Comparison to Original C++ Firmware
-
-This custom component ports the core split-flap movement and homing logic from the original [C++ firmware](https://github.com/ManlyMorgan/Split-Flap-Display) and the [fork by DrewFerg11](https://github.com/DrewFerg11/Split-Flap-Display) into a native ESPHome architecture. Some key differences & tradeoffs:
-
-| Dimension | Custom Firmware Architecture | ESPHome Custom Component | Tradeoffs |
-| :--- | :--- | :--- | :--- |
-| **Execution & Threading** | Single-threaded blocking `loop()`. | **Dual-Thread Architecture**: High-priority FreeRTOS task (Priority 24, Core 0) with hybrid yield/busy-wait execution and a 250ms network cooldown buffer. | Single-threading maximizes timing precision; is simpler, but harder to integrate with other logic. |
-| **Configuration** | WebUI runtime config; most parameters hardcoded. | Declarative ESPHome YAML config with support for binding to dynamic entities. | Custom firmware offers simple UI configuration but less flexibility. ESPHome integrates with shared secrets, fleets, and dynamic entities. |
-| **Smart Home Integration & Management** | Custom MQTT implementation with MQTT auto-discovery. | Native ESPHome `text` platform entity with automatic Home Assistant API discovery. | ESPHome eliminates custom API maintenance and adds native OTA updates and wireless logging, but carries higher overhead. |
-| **Expansion** | Adding extra peripherals (sensors, LEDs, buttons) or onboard logic requires custom C++ code. | Native integration  with ESPHome component ecosystem (sensors, NeoPixels, rotary encoders). | Custom firmware requires writing C++ drivers for hardware changes; ESPHome enables adding sensors, controls, and logic declaratively via YAML. |
-| **Connectivity** | Custom WiFi implementation | ESPHome WiFi implmenetation. | ESPHome supports more configurable and robust WiFi stack with auto-reconnect, AP steering, captive portal, etc. |
-
-tl;dr: ESPHome provides a more robust + feature rich foundation, but because the logic runs in a more cooperative environemnt, may not be as timing precise.
-
 ## Hardware Configuration
 
 See [here](https://drewferg11.github.io/Split-Flap-Display/resources/) for more info.
@@ -250,3 +197,56 @@ on_press:
   - split_flap.step_9_test:
       id: split_flap_display
 ```
+
+## Firmware Architecture
+
+- **Dedicated FreeRTOS Task**: Runs motor stepping sequences in a high-priority task (Priority 24) on Core 0 with hybrid busy-wait/yielding, mitigating timing jitter caused by ESPHome's main loop and WiFi network stack.
+- **Real-Time Offset Calibration**: Link each module's offset to an ESPHome `number` entity, enabling runtime fine-tuning from Home Assistant.
+- **Startup Display Sequences**: Supports multi-line startup strings displayed sequentially during boot.
+
+### Display State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> STATE_IDLE
+
+    STATE_IDLE --> STATE_NETWORK_COOLDOWN: write_string / home / home_to_string
+    STATE_IDLE --> STATE_NETWORK_COOLDOWN: Startup string line trigger (2s interval)
+
+    state "STATE_NETWORK_COOLDOWN<br/>(250ms Delay)" as STATE_NETWORK_COOLDOWN
+    STATE_NETWORK_COOLDOWN --> STATE_START_STEPS: Network cooldown complete
+
+    state "STATE_START_STEPS<br/>(200ms Alignment)" as STATE_START_STEPS
+    STATE_START_STEPS --> STATE_STEPPING: Motors energized & rotor aligned
+
+    state "STATE_STEPPING<br/>(FreeRTOS Stepping Task)" as STATE_STEPPING
+    STATE_STEPPING --> STATE_START_STEPS: Stage 1 (Homing) complete<br/>(Prepare Stage 2 Target String)
+    STATE_STEPPING --> STATE_SETTLE: All modules reached target positions
+
+    state "STATE_SETTLE<br/>(200ms Mechanical Settle)" as STATE_SETTLE
+    STATE_SETTLE --> STATE_STOPPING: Settle delay complete
+
+    state "STATE_STOPPING<br/>(De-energize & Publish)" as STATE_STOPPING
+    STATE_STOPPING --> STATE_IDLE: Motors released & state published
+```
+
+- **`STATE_IDLE`**: The default resting state when no motor movement is taking place. If multi-line `startup_string` text is configured, this state periodically triggers the display of the next line (at 2-second intervals).
+- **`STATE_NETWORK_COOLDOWN`**: A 250ms buffer delay entered immediately after receiving a display or homing command. This gives the ESP32 network stack (WiFi, mDNS, and Home Assistant API encryption) time to settle before high-frequency motor stepping starts.
+- **`STATE_START_STEPS`**: A 200ms delay that energizes the stepper motor coils to align the physical rotors to the magnetic field phase before stepping starts.
+- **`STATE_STEPPING`**: The active movement state managed by a high-priority FreeRTOS task (Priority 24) on Core 0. The task steps modules toward target positions and polls Hall effect sensors for zero-position calibration at the magnet trailing edge. During homing, completing Stage 1 (finding the magnet) transitions back to `STATE_START_STEPS` to execute Stage 2 (moving to the target character).
+- **`STATE_SETTLE`**: A 200ms settling pause after stepping finishes to allow the physical flaps and drum mechanisms to come to a complete rest.
+- **`STATE_STOPPING`**: De-energizes the motor coils (if configured to release), stops high-frequency loop requests, and publishes the final text state to Home Assistant before returning to `STATE_IDLE`.
+
+### Comparison to Original C++ Firmware
+
+This custom component ports the core split-flap movement and homing logic from the original [C++ firmware](https://github.com/ManlyMorgan/Split-Flap-Display) and the [fork by DrewFerg11](https://github.com/DrewFerg11/Split-Flap-Display) into a native ESPHome architecture. Some key differences & tradeoffs:
+
+| Dimension | Custom Firmware Architecture | ESPHome Custom Component | Tradeoffs |
+| :--- | :--- | :--- | :--- |
+| **Execution & Threading** | Single-threaded blocking `loop()`. | **Dual-Thread Architecture**: High-priority FreeRTOS task (Priority 24, Core 0) with hybrid yield/busy-wait execution and a 250ms network cooldown buffer. | Single-threading maximizes timing precision; is simpler, but harder to integrate with other logic. |
+| **Configuration** | WebUI runtime config; most parameters hardcoded. | Declarative ESPHome YAML config with support for binding to dynamic entities. | Custom firmware offers simple UI configuration but less flexibility. ESPHome integrates with shared secrets, fleets, and dynamic entities. |
+| **Smart Home Integration & Management** | Custom MQTT implementation with MQTT auto-discovery. | Native ESPHome `text` platform entity with automatic Home Assistant API discovery. | ESPHome eliminates custom API maintenance and adds native OTA updates and wireless logging, but carries higher overhead. |
+| **Expansion** | Adding extra peripherals (sensors, LEDs, buttons) or onboard logic requires custom C++ code. | Native integration  with ESPHome component ecosystem (sensors, NeoPixels, rotary encoders). | Custom firmware requires writing C++ drivers for hardware changes; ESPHome enables adding sensors, controls, and logic declaratively via YAML. |
+| **Connectivity** | Custom WiFi implementation | ESPHome WiFi implmenetation. | ESPHome supports more configurable and robust WiFi stack with auto-reconnect, AP steering, captive portal, etc. |
+
+tl;dr: ESPHome provides a more robust + feature rich foundation, but because the logic runs in a more cooperative environemnt, may not be as timing precise.
