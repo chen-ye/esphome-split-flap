@@ -13,13 +13,30 @@
 namespace esphome {
 namespace split_flap {
 
-enum State {
-  STATE_IDLE,
-  STATE_NETWORK_COOLDOWN,
-  STATE_START_STEPS,
-  STATE_STEPPING,
-  STATE_SETTLE,
-  STATE_STOPPING
+enum State { STATE_IDLE, STATE_NETWORK_COOLDOWN, STATE_START_STEPS, STATE_STEPPING, STATE_SETTLE, STATE_STOPPING };
+
+class SplitFlapDisplay;
+
+class SplitFlapPageTimeNumber : public number::Number, public Component {
+ public:
+  SplitFlapPageTimeNumber() = default;
+  void set_parent(SplitFlapDisplay *parent) { this->parent_ = parent; }
+
+ protected:
+  void control(float value) override;
+  SplitFlapDisplay *parent_{nullptr};
+};
+
+class SplitFlapModuleOffsetNumber : public number::Number, public Component {
+ public:
+  SplitFlapModuleOffsetNumber() = default;
+  void set_parent(SplitFlapDisplay *parent) { this->parent_ = parent; }
+  void set_module_index(size_t index) { this->module_index_ = index; }
+
+ protected:
+  void control(float value) override;
+  SplitFlapDisplay *parent_{nullptr};
+  size_t module_index_{0};
 };
 
 class SplitFlapDisplay : public Component, public text::Text {
@@ -43,12 +60,20 @@ class SplitFlapDisplay : public Component, public text::Text {
   void set_charset(const std::string &charset) { this->charset_ = charset; }
   void set_home_on_startup(bool home_on_startup) { this->home_on_startup_ = home_on_startup; }
   void set_startup_string(const std::string &startup_string);
+  void set_page_time(uint32_t ms) { this->default_page_time_ms_ = ms; }
+  void set_page_time_number(number::Number *num) { this->page_time_number_ = num; }
 
   void add_module(uint8_t address, int offset);
   void add_module(uint8_t address, number::Number *offset_number);
+  void add_module_offset_number(size_t index, number::Number *offset_number);
+
+  uint32_t get_page_time_ms() const;
 
   // Operational methods
   void write_string(const std::string &input_string, float speed = -1.0f, bool centering = true);
+  void write_paginated(const std::string &input_string, int32_t page_time_ms = -1, float speed = -1.0f,
+                       bool centering = true);
+  void clear_pagination();
   void home(float speed = -1.0f, bool use_startup_string = false);
   void home_to_string(const std::string &home_string, float speed = -1.0f);
   void step_9_test();
@@ -57,6 +82,7 @@ class SplitFlapDisplay : public Component, public text::Text {
   void start_motors();
   void stop_motors();
   void start_movement();
+  void write_page_internal(const std::string &input_string, float speed = -1.0f, bool centering = true);
 
   i2c::I2CBus *bus_{nullptr};
   int steps_per_rot_{2048};
@@ -68,6 +94,15 @@ class SplitFlapDisplay : public Component, public text::Text {
   std::string startup_string_{""};
   std::vector<std::string> startup_lines_;
   size_t startup_line_idx_{0};
+
+  number::Number *page_time_number_{nullptr};
+  uint32_t default_page_time_ms_{3000};
+  std::vector<std::string> paginated_lines_;
+  size_t paginated_line_idx_{0};
+  uint32_t current_page_interval_ms_{3000};
+  unsigned long last_page_advance_time_ms_{0};
+  float paginated_speed_{-1.0f};
+  bool paginated_centering_{true};
 
   std::vector<SplitFlapModule *> modules_;
 
@@ -109,8 +144,7 @@ class SplitFlapDisplay : public Component, public text::Text {
 };
 
 // Automation Actions
-template<typename... Ts>
-class WriteStringAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
+template<typename... Ts> class WriteStringAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
  public:
   TEMPLATABLE_VALUE(std::string, value)
   TEMPLATABLE_VALUE(float, speed)
@@ -124,8 +158,23 @@ class WriteStringAction : public Action<Ts...>, public Parented<SplitFlapDisplay
   }
 };
 
-template<typename... Ts>
-class HomeAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
+template<typename... Ts> class WritePaginatedAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
+ public:
+  TEMPLATABLE_VALUE(std::string, value)
+  TEMPLATABLE_VALUE(uint32_t, page_time)
+  TEMPLATABLE_VALUE(float, speed)
+  TEMPLATABLE_VALUE(bool, centering)
+
+  void play(Ts... x) override {
+    auto val = this->value_.value(x...);
+    int32_t page_tm = this->page_time_.has_value() ? (int32_t) this->page_time_.value(x...) : -1;
+    float spd = this->speed_.has_value() ? this->speed_.value(x...) : -1.0f;
+    bool cent = this->centering_.has_value() ? this->centering_.value(x...) : true;
+    this->parent_->write_paginated(val, page_tm, spd, cent);
+  }
+};
+
+template<typename... Ts> class HomeAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
  public:
   TEMPLATABLE_VALUE(float, speed)
 
@@ -135,8 +184,7 @@ class HomeAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
   }
 };
 
-template<typename... Ts>
-class HomeToStringAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
+template<typename... Ts> class HomeToStringAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
  public:
   TEMPLATABLE_VALUE(std::string, value)
   TEMPLATABLE_VALUE(float, speed)
@@ -148,12 +196,9 @@ class HomeToStringAction : public Action<Ts...>, public Parented<SplitFlapDispla
   }
 };
 
-template<typename... Ts>
-class Step9TestAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
+template<typename... Ts> class Step9TestAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
  public:
-  void play(Ts... x) override {
-    this->parent_->step_9_test();
-  }
+  void play(Ts... x) override { this->parent_->step_9_test(); }
 };
 
 }  // namespace split_flap

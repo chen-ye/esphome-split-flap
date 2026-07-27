@@ -63,6 +63,15 @@ button:
       - split_flap.step_9_test:
           id: split_flap_display
 
+  - platform: template
+    name: "Test Paginated Write"
+    on_press:
+      - split_flap.write_paginated:
+          id: split_flap_display
+          value: |
+            WELCOME TO THE SPLIT FLAP DISPLAY
+            PAGINATED AUTOMATICALLY
+
 number:
   # =========================================================================
   # Calibration Offset Polarity Cheatsheet:
@@ -75,85 +84,67 @@ number:
   # - Flap too low (needs to go UP/earlier): Increase offset (make it more positive).
   # - Flap too high (needs to go DOWN/later): Decrease offset (make it more negative).
   # =========================================================================
-  - platform: template
-    id: offset_0
+  - platform: split_flap
+    type: page_time
+    split_flap_id: split_flap_display
+    name: "Page Advance Time"
+    initial_value: 3.0s
+
+  - platform: split_flap
+    type: module_offset
+    split_flap_id: split_flap_display
+    module_index: 0
     name: "Module 0 Offset"
-    min_value: -100
-    max_value: 100
-    step: 1
     initial_value: 0
-    optimistic: true
-    restore_value: true
 
-  - platform: template
-    id: offset_1
+  - platform: split_flap
+    type: module_offset
+    split_flap_id: split_flap_display
+    module_index: 1
     name: "Module 1 Offset"
-    min_value: -100
-    max_value: 100
-    step: 1
     initial_value: 0
-    optimistic: true
-    restore_value: true
 
-  - platform: template
-    id: offset_2
+  - platform: split_flap
+    type: module_offset
+    split_flap_id: split_flap_display
+    module_index: 2
     name: "Module 2 Offset"
-    min_value: -100
-    max_value: 100
-    step: 1
     initial_value: 0
-    optimistic: true
-    restore_value: true
 
-  - platform: template
-    id: offset_3
+  - platform: split_flap
+    type: module_offset
+    split_flap_id: split_flap_display
+    module_index: 3
     name: "Module 3 Offset"
-    min_value: -100
-    max_value: 100
-    step: 1
     initial_value: -24
-    optimistic: true
-    restore_value: true
 
-  - platform: template
-    id: offset_4
+  - platform: split_flap
+    type: module_offset
+    split_flap_id: split_flap_display
+    module_index: 4
     name: "Module 4 Offset"
-    min_value: -100
-    max_value: 100
-    step: 1
     initial_value: 0
-    optimistic: true
-    restore_value: true
 
-  - platform: template
-    id: offset_5
+  - platform: split_flap
+    type: module_offset
+    split_flap_id: split_flap_display
+    module_index: 5
     name: "Module 5 Offset"
-    min_value: -100
-    max_value: 100
-    step: 1
     initial_value: 34
-    optimistic: true
-    restore_value: true
 
-  - platform: template
-    id: offset_6
+  - platform: split_flap
+    type: module_offset
+    split_flap_id: split_flap_display
+    module_index: 6
     name: "Module 6 Offset"
-    min_value: -100
-    max_value: 100
-    step: 1
     initial_value: 0
-    optimistic: true
-    restore_value: true
 
-  - platform: template
-    id: offset_7
+  - platform: split_flap
+    type: module_offset
+    split_flap_id: split_flap_display
+    module_index: 7
     name: "Module 7 Offset"
-    min_value: -100
-    max_value: 100
-    step: 1
     initial_value: -15
-    optimistic: true
-    restore_value: true
 
 text:
   - platform: split_flap
@@ -169,21 +160,12 @@ text:
       HELLO
       ALEX
 
-
     modules:
       - address: 0x20
-        offset: offset_0
       - address: 0x21
-        offset: offset_1
       - address: 0x22
-        offset: offset_2
       - address: 0x23
-        offset: offset_3
       - address: 0x24
-        offset: offset_4
       - address: 0x25
-        offset: offset_5
       - address: 0x26
-        offset: offset_6
       - address: 0x27
-        offset: offset_7

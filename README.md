@@ -22,7 +22,7 @@ Each split-flap module uses a PCF8575 expander connected to the shared I2C bus (
 
 ### Example Configuration
 
-A complete example configuration is available in the [`esphome-splitflap.yaml`](esphome-splitflap.yaml) file. To use it'll you'll need to declare the following varaibles in your `secrets.yaml` file:
+A complete example configuration is available in the [`esphome-splitflap.yaml`](esphome-splitflap.yaml) file. To use it you'll need to declare the following variables in your `secrets.yaml` file:
 
 ```yaml
 wifi_ssid: [YOUR_WIFI_SSID]
@@ -237,6 +237,14 @@ stateDiagram-v2
 - **`STATE_SETTLE`**: A 200ms settling pause after stepping finishes to allow the physical flaps and drum mechanisms to come to a complete rest.
 - **`STATE_STOPPING`**: De-energizes the motor coils (if configured to release), stops high-frequency loop requests, and publishes the final text state to Home Assistant before returning to `STATE_IDLE`.
 
+A complete example configuration is available in the [`esphome-splitflap.yaml`](esphome-splitflap.yaml) file. To use it you'll need to declare the following variables in your `secrets.yaml` file:
+
+```yaml
+wifi_ssid: [YOUR_WIFI_SSID]
+wifi_password: [YOUR_WIFI_PASSWORD]
+home_assistant_key: [YOUR_HOME_ASSISTANT_KEY]
+```
+
 ### Comparison to Original C++ Firmware
 
 This custom component ports the core split-flap movement and homing logic from the original [C++ firmware](https://github.com/ManlyMorgan/Split-Flap-Display) and the [fork by DrewFerg11](https://github.com/DrewFerg11/Split-Flap-Display) into a native ESPHome architecture. Some key differences & tradeoffs:
@@ -247,6 +255,6 @@ This custom component ports the core split-flap movement and homing logic from t
 | **Configuration** | WebUI runtime config; most parameters hardcoded. | Declarative ESPHome YAML config with support for binding to dynamic entities. | Custom firmware offers simple UI configuration but less flexibility. ESPHome integrates with shared secrets, fleets, and dynamic entities. |
 | **Smart Home Integration & Management** | Custom MQTT implementation with MQTT auto-discovery. | Native ESPHome `text` platform entity with automatic Home Assistant API discovery. | ESPHome eliminates custom API maintenance and adds native OTA updates and wireless logging, but carries higher overhead. |
 | **Expansion** | Adding extra peripherals (sensors, LEDs, buttons) or onboard logic requires custom C++ code. | Native integration  with ESPHome component ecosystem (sensors, NeoPixels, rotary encoders). | Custom firmware requires writing C++ drivers for hardware changes; ESPHome enables adding sensors, controls, and logic declaratively via YAML. |
-| **Connectivity** | Custom WiFi implementation | ESPHome WiFi implmenetation. | ESPHome supports more configurable and robust WiFi stack with auto-reconnect, AP steering, captive portal, etc. |
+| **Connectivity** | Custom WiFi implementation | ESPHome WiFi implementation. | ESPHome supports more configurable and robust WiFi stack with auto-reconnect, AP steering, captive portal, etc. |
 
-tl;dr: ESPHome provides a more robust + feature rich foundation, but because the logic runs in a more cooperative environemnt, may not be as timing precise.
+tl;dr: ESPHome provides a more robust + feature rich foundation, but because the logic runs in a more cooperative environment, may not be as timing precise.

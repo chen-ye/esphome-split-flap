@@ -7,19 +7,17 @@ namespace split_flap {
 
 static const char *const TAG = "split_flap.module";
 
-const char SplitFlapModule::StandardChars[37] = {
-    ' ', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
-    'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y',
-    'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
-};
+const char SplitFlapModule::StandardChars[37] = {' ', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
+                                                 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y',
+                                                 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
-const char SplitFlapModule::ExtendedChars[48] = {
-    ' ', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
-    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4',
-    '5', '6', '7', '8', '9', '\'', ':', '/', '?', '!', '.', '-', '>', '$', '#', '%'
-};
+const char SplitFlapModule::ExtendedChars[48] = {' ', 'A',  'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+                                                 'L', 'M',  'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+                                                 'X', 'Y',  'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8',
+                                                 '9', '\'', ':', '/', '?', '!', '.', '-', '>', '$', '#', '%'};
 
-SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, int step_offset, int magnet_position, const std::string &charset) {
+SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, int step_offset, int magnet_position,
+                                 const std::string &charset) {
   this->set_i2c_address(address);
   this->steps_per_rot_ = steps_per_rotation;
   this->step_offset_ = step_offset;
@@ -35,7 +33,8 @@ SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, int st
   }
 }
 
-SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, number::Number *offset_number, int magnet_position, const std::string &charset) {
+SplitFlapModule::SplitFlapModule(uint8_t address, int steps_per_rotation, number::Number *offset_number,
+                                 int magnet_position, const std::string &charset) {
   this->set_i2c_address(address);
   this->steps_per_rot_ = steps_per_rotation;
   this->offset_number_ = offset_number;
@@ -57,16 +56,12 @@ void SplitFlapModule::update_cached_offset() {
   }
 }
 
-int SplitFlapModule::get_step_offset() const {
-  return this->step_offset_;
-}
+int SplitFlapModule::get_step_offset() const { return this->step_offset_; }
 
-int SplitFlapModule::get_magnet_position() const {
-  return this->base_magnet_position_;
-}
+int SplitFlapModule::get_magnet_position() const { return this->base_magnet_position_; }
 
 inline void __attribute__((always_inline)) SplitFlapModule::write_io(uint16_t data) {
-  uint8_t buffer[2] = {(uint8_t)(data & 0xFF), (uint8_t)((data >> 8) & 0xFF)};
+  uint8_t buffer[2] = {(uint8_t) (data & 0xFF), (uint8_t) ((data >> 8) & 0xFF)};
   auto error = this->write(buffer, 2);
   if (error != i2c::ERROR_OK && !this->has_errored_) {
     this->has_errored_ = true;
@@ -84,7 +79,7 @@ void SplitFlapModule::init() {
     current_position += step_size;
   }
 
-  uint16_t init_state = 0b1111111111100001; // Pin 15 (17) as INPUT, Pins 1-4 as OUTPUT
+  uint16_t init_state = 0b1111111111100001;  // Pin 15 (17) as INPUT, Pins 1-4 as OUTPUT
   this->write_io(init_state);
 
   this->stop();
@@ -126,11 +121,21 @@ void SplitFlapModule::start() {
 void __attribute__((hot)) SplitFlapModule::step(bool update_position) {
   uint16_t step_state;
   switch (this->step_number_) {
-    case 0: step_state = 0b1111111111100111; break;
-    case 1: step_state = 0b1111111111110011; break;
-    case 2: step_state = 0b1111111111111001; break;
-    case 3: step_state = 0b1111111111101101; break;
-    default: step_state = 0b1111111111100001; break;
+    case 0:
+      step_state = 0b1111111111100111;
+      break;
+    case 1:
+      step_state = 0b1111111111110011;
+      break;
+    case 2:
+      step_state = 0b1111111111111001;
+      break;
+    case 3:
+      step_state = 0b1111111111101101;
+      break;
+    default:
+      step_state = 0b1111111111100001;
+      break;
   }
   this->write_io(step_state);
   if (update_position) {
@@ -160,12 +165,12 @@ bool SplitFlapModule::read_hall_effect_sensor() {
     } else {
       this->has_magnet_detected_ = false;
     }
-    return magnet_present; // true = magnet is present
+    return magnet_present;  // true = magnet is present
   } else {
     ESP_LOGE(TAG, "I2C ERROR reading hall effect sensor on module 0x%02X!", this->address_);
   }
-  
-  return false; // I2C error = assume no magnet to prevent hallucinated triggers
+
+  return false;  // I2C error = assume no magnet to prevent hallucinated triggers
 }
 
 }  // namespace split_flap

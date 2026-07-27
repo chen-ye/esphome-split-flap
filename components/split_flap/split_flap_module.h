@@ -12,8 +12,10 @@ namespace split_flap {
 class SplitFlapModule : public i2c::I2CDevice {
  public:
   SplitFlapModule() = default;
-  SplitFlapModule(uint8_t address, int steps_per_rotation, int step_offset, int magnet_position, const std::string &charset);
-  SplitFlapModule(uint8_t address, int steps_per_rotation, number::Number *offset_number, int magnet_position, const std::string &charset);
+  SplitFlapModule(uint8_t address, int steps_per_rotation, int step_offset, int magnet_position,
+                  const std::string &charset);
+  SplitFlapModule(uint8_t address, int steps_per_rotation, number::Number *offset_number, int magnet_position,
+                  const std::string &charset);
 
   void init();
   void step(bool update_position = true) __attribute__((hot));
@@ -22,6 +24,7 @@ class SplitFlapModule : public i2c::I2CDevice {
 
   int get_magnet_position() const;
   int get_step_offset() const;
+  void set_offset_number(number::Number *offset_number) { this->offset_number_ = offset_number; }
   void update_cached_offset();
   int get_char_position(char input_char);
   int get_position() const { return this->position_; }
@@ -31,9 +34,7 @@ class SplitFlapModule : public i2c::I2CDevice {
   bool read_hall_effect_sensor();
   void magnet_detected() { this->position_ = this->get_magnet_position(); }
 
-  void reset_state() {
-    this->has_magnet_detected_ = false;
-  }
+  void reset_state() { this->has_magnet_detected_ = false; }
 
   bool get_has_errored() const { return this->has_errored_; }
   bool get_has_magnet_detected() const { return this->has_magnet_detected_; }

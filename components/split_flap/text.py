@@ -1,15 +1,18 @@
-import esphome.codegen as cg
-import esphome.config_validation as cv
-from esphome.components import text, i2c, number
 from esphome import automation
-from esphome.const import CONF_ID, CONF_I2C_ID, CONF_VALUE
+import esphome.codegen as cg
+from esphome.components import i2c, number, text
+import esphome.config_validation as cv
+from esphome.const import CONF_I2C_ID, CONF_ID, CONF_VALUE
+
 from . import split_flap_ns
 
 # C++ Class Reference
 SplitFlapDisplay = split_flap_ns.class_("SplitFlapDisplay", cg.Component, text.Text)
 
 # Automation Action References
+# Automation Action References
 WriteStringAction = split_flap_ns.class_("WriteStringAction", automation.Action)
+WritePaginatedAction = split_flap_ns.class_("WritePaginatedAction", automation.Action)
 HomeAction = split_flap_ns.class_("HomeAction", automation.Action)
 HomeToStringAction = split_flap_ns.class_("HomeToStringAction", automation.Action)
 Step9TestAction = split_flap_ns.class_("Step9TestAction", automation.Action)
@@ -27,6 +30,7 @@ CONF_OFFSET = "offset"
 CONF_ADDRESS = "address"
 CONF_SPEED = "speed"
 CONF_CENTERING = "centering"
+CONF_PAGE_TIME = "page_time"
 
 MODULE_SCHEMA = cv.Schema(
     {
@@ -50,6 +54,9 @@ CONFIG_SCHEMA = (
             ): cv.string,
             cv.Optional(CONF_HOME_ON_STARTUP, default=True): cv.boolean,
             cv.Optional(CONF_STARTUP_STRING, default=""): cv.string,
+            cv.Optional(CONF_PAGE_TIME): cv.Any(
+                cv.positive_time_period_milliseconds, cv.use_id(number.Number)
+            ),
             cv.Required(CONF_MODULES): cv.ensure_list(MODULE_SCHEMA),
         }
     )
@@ -74,6 +81,13 @@ async def to_code(config):
     cg.add(var.set_charset(config[CONF_CHARSET]))
     cg.add(var.set_home_on_startup(config[CONF_HOME_ON_STARTUP]))
     cg.add(var.set_startup_string(config[CONF_STARTUP_STRING]))
+
+    if (page_time := config.get(CONF_PAGE_TIME)) is not None:
+        if isinstance(page_time, int):
+            cg.add(var.set_page_time(page_time))
+        else:
+            page_time_var = await cg.get_variable(page_time)
+            cg.add(var.set_page_time_number(page_time_var))
 
     # Add each module configuration
     for module_conf in config[CONF_MODULES]:
@@ -104,11 +118,42 @@ async def split_flap_write_to_code(config, action_id, template_arg, args):
     await cg.register_parented(var, config[CONF_ID])
     template_ = await cg.templatable(config[CONF_VALUE], args, cg.std_string)
     cg.add(var.set_value(template_))
-    if CONF_SPEED in config:
-        template_ = await cg.templatable(config[CONF_SPEED], args, cg.float_)
+    if (speed := config.get(CONF_SPEED)) is not None:
+        template_ = await cg.templatable(speed, args, cg.float_)
         cg.add(var.set_speed(template_))
-    if CONF_CENTERING in config:
-        template_ = await cg.templatable(config[CONF_CENTERING], args, cg.bool_)
+    if (centering := config.get(CONF_CENTERING)) is not None:
+        template_ = await cg.templatable(centering, args, cg.bool_)
+        cg.add(var.set_centering(template_))
+    return var
+
+
+@automation.register_action(
+    "split_flap.write_paginated",
+    WritePaginatedAction,
+    cv.Schema(
+        {
+            cv.Required(CONF_ID): cv.use_id(SplitFlapDisplay),
+            cv.Required(CONF_VALUE): cv.templatable(cv.string),
+            cv.Optional(CONF_PAGE_TIME): cv.templatable(cv.positive_time_period_milliseconds),
+            cv.Optional(CONF_SPEED): cv.templatable(cv.positive_float),
+            cv.Optional(CONF_CENTERING): cv.templatable(cv.boolean),
+        }
+    ),
+    synchronous=False,
+)
+async def split_flap_write_paginated_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    template_ = await cg.templatable(config[CONF_VALUE], args, cg.std_string)
+    cg.add(var.set_value(template_))
+    if (page_time := config.get(CONF_PAGE_TIME)) is not None:
+        template_ = await cg.templatable(page_time, args, cg.uint32)
+        cg.add(var.set_page_time(template_))
+    if (speed := config.get(CONF_SPEED)) is not None:
+        template_ = await cg.templatable(speed, args, cg.float_)
+        cg.add(var.set_speed(template_))
+    if (centering := config.get(CONF_CENTERING)) is not None:
+        template_ = await cg.templatable(centering, args, cg.bool_)
         cg.add(var.set_centering(template_))
     return var
 
@@ -127,8 +172,8 @@ async def split_flap_write_to_code(config, action_id, template_arg, args):
 async def split_flap_home_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])
-    if CONF_SPEED in config:
-        template_ = await cg.templatable(config[CONF_SPEED], args, cg.float_)
+    if (speed := config.get(CONF_SPEED)) is not None:
+        template_ = await cg.templatable(speed, args, cg.float_)
         cg.add(var.set_speed(template_))
     return var
 
@@ -150,8 +195,8 @@ async def split_flap_home_to_string_to_code(config, action_id, template_arg, arg
     await cg.register_parented(var, config[CONF_ID])
     template_ = await cg.templatable(config[CONF_VALUE], args, cg.std_string)
     cg.add(var.set_value(template_))
-    if CONF_SPEED in config:
-        template_ = await cg.templatable(config[CONF_SPEED], args, cg.float_)
+    if (speed := config.get(CONF_SPEED)) is not None:
+        template_ = await cg.templatable(speed, args, cg.float_)
         cg.add(var.set_speed(template_))
     return var
 
@@ -170,4 +215,3 @@ async def split_flap_step_9_test_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])
     return var
-

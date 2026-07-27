@@ -7,10 +7,42 @@ namespace split_flap {
 
 static const char *const TAG = "split_flap.display";
 
+void SplitFlapPageTimeNumber::control(float value) {
+  this->publish_state(value);
+  if (this->parent_ != nullptr) {
+    this->parent_->set_page_time((uint32_t) (value * 1000.0f));
+  }
+}
+
+void SplitFlapModuleOffsetNumber::control(float value) {
+  this->publish_state(value);
+  if (this->parent_ != nullptr) {
+    this->parent_->add_module_offset_number(this->module_index_, this);
+  }
+}
+
 SplitFlapDisplay::~SplitFlapDisplay() {
   for (auto *module : this->modules_) {
     delete module;
   }
+}
+
+void SplitFlapDisplay::add_module_offset_number(size_t index, number::Number *offset_number) {
+  if (index < this->modules_.size()) {
+    this->modules_[index]->set_offset_number(offset_number);
+  }
+}
+
+uint32_t SplitFlapDisplay::get_page_time_ms() const {
+  if (this->page_time_number_ != nullptr && !std::isnan(this->page_time_number_->state)) {
+    return (uint32_t) (this->page_time_number_->state * 1000.0f);
+  }
+  return this->default_page_time_ms_;
+}
+
+void SplitFlapDisplay::clear_pagination() {
+  this->paginated_lines_.clear();
+  this->paginated_line_idx_ = 0;
 }
 
 void SplitFlapDisplay::set_startup_string(const std::string &startup_string) {
@@ -63,7 +95,8 @@ void SplitFlapDisplay::add_module(uint8_t address, int offset) {
 }
 
 void SplitFlapDisplay::add_module(uint8_t address, number::Number *offset_number) {
-  auto *module = new SplitFlapModule(address, this->steps_per_rot_, offset_number, this->magnet_position_, this->charset_);
+  auto *module =
+      new SplitFlapModule(address, this->steps_per_rot_, offset_number, this->magnet_position_, this->charset_);
   this->modules_.push_back(module);
 }
 
@@ -80,11 +113,14 @@ void SplitFlapDisplay::dump_config() {
   }
 }
 
-void SplitFlapDisplay::control(const std::string &value) {
-  this->write_string(value);
-}
+void SplitFlapDisplay::control(const std::string &value) { this->write_string(value); }
 
 void SplitFlapDisplay::write_string(const std::string &input_string, float speed, bool centering) {
+  this->clear_pagination();
+  this->write_page_internal(input_string, speed, centering);
+}
+
+void SplitFlapDisplay::write_page_internal(const std::string &input_string, float speed, bool centering) {
   if (speed < 0) {
     speed = this->max_vel_;
   }
@@ -130,7 +166,8 @@ void SplitFlapDisplay::write_string(const std::string &input_string, float speed
 
     char current_char = display_string[i];
     int char_pos = this->modules_[i]->get_char_position(current_char);
-    this->target_positions_[i] = (char_pos - this->modules_[i]->get_step_offset() + this->steps_per_rot_) % this->steps_per_rot_;
+    this->target_positions_[i] =
+        (char_pos - this->modules_[i]->get_step_offset() + this->steps_per_rot_) % this->steps_per_rot_;
     this->calibrated_this_move_[i] = false;
     this->was_magnet_present_[i] = false;
     this->calibration_events_[i].triggered = false;
@@ -156,7 +193,91 @@ void SplitFlapDisplay::write_string(const std::string &input_string, float speed
   }
 }
 
+void SplitFlapDisplay::write_paginated(const std::string &input_string, int32_t page_time_ms, float speed,
+                                       bool centering) {
+  this->clear_pagination();
+  this->current_page_interval_ms_ = page_time_ms >= 0 ? (uint32_t) page_time_ms : this->get_page_time_ms();
+  this->paginated_speed_ = speed;
+  this->paginated_centering_ = centering;
+
+  if (input_string.empty() || this->modules_.empty()) {
+    this->write_page_internal("", speed, centering);
+    return;
+  }
+
+  size_t module_count = this->modules_.size();
+
+  // Split input string by newlines (\n or \r\n)
+  std::vector<std::string> raw_lines;
+  size_t start = 0;
+  size_t end = input_string.find('\n');
+  while (end != std::string::npos) {
+    std::string line = input_string.substr(start, end - start);
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+    raw_lines.push_back(line);
+    start = end + 1;
+    end = input_string.find('\n', start);
+  }
+  std::string line = input_string.substr(start);
+  if (!line.empty() && line.back() == '\r') {
+    line.pop_back();
+  }
+  raw_lines.push_back(line);
+
+  // Wrap or split each line based on module_count
+  for (const auto &raw_line : raw_lines) {
+    if (raw_line.length() <= module_count) {
+      this->paginated_lines_.push_back(raw_line);
+      continue;
+    }
+
+    std::stringstream ss(raw_line);
+    std::string word;
+    std::string current_page = "";
+
+    while (ss >> word) {
+      if (word.length() > module_count) {
+        if (!current_page.empty()) {
+          this->paginated_lines_.push_back(current_page);
+          current_page = "";
+        }
+        for (size_t i = 0; i < word.length(); i += module_count) {
+          std::string chunk = word.substr(i, module_count);
+          if (chunk.length() == module_count) {
+            this->paginated_lines_.push_back(chunk);
+          } else {
+            current_page = chunk;
+          }
+        }
+      } else {
+        if (current_page.empty()) {
+          current_page = word;
+        } else if (current_page.length() + 1 + word.length() <= module_count) {
+          current_page += " " + word;
+        } else {
+          this->paginated_lines_.push_back(current_page);
+          current_page = word;
+        }
+      }
+    }
+    if (!current_page.empty()) {
+      this->paginated_lines_.push_back(current_page);
+    }
+  }
+
+  if (this->paginated_lines_.empty()) {
+    return;
+  }
+
+  this->write_page_internal(this->paginated_lines_[0], speed, centering);
+  this->paginated_line_idx_ = 1;
+  this->last_page_advance_time_ms_ = millis();
+}
+
 void SplitFlapDisplay::home(float speed, bool use_startup_string) {
+  this->clear_pagination();
   if (speed < 0) {
     speed = this->max_vel_;
   }
@@ -170,7 +291,8 @@ void SplitFlapDisplay::home(float speed, bool use_startup_string) {
   std::string offsets_msg = "Starting Homing. Module Offsets: ";
   for (size_t i = 0; i < this->modules_.size(); i++) {
     this->modules_[i]->update_cached_offset();
-    offsets_msg += std::to_string(i) + ":" + std::to_string(this->modules_[i]->get_step_offset()) + (i == this->modules_.size() - 1 ? "" : ", ");
+    offsets_msg += std::to_string(i) + ":" + std::to_string(this->modules_[i]->get_step_offset()) +
+                   (i == this->modules_.size() - 1 ? "" : ", ");
   }
   ESP_LOGI(TAG, "%s", offsets_msg.c_str());
 
@@ -190,12 +312,12 @@ void SplitFlapDisplay::home(float speed, bool use_startup_string) {
     this->was_magnet_present_[i] = false;
     this->calibration_events_[i].triggered = false;
     this->last_step_times_[i] = current_time;
-    this->needs_stepping_[i] = true; // force all modules to run calibration rotation
+    this->needs_stepping_[i] = true;  // force all modules to run calibration rotation
   }
 
-  this->release_motors_ = false; // keep coils energized between stage 1 and stage 2
+  this->release_motors_ = false;  // keep coils energized between stage 1 and stage 2
   this->homing_stage_2_pending_ = true;
-  
+
   if (use_startup_string && !this->startup_lines_.empty()) {
     this->startup_line_idx_ = 0;
     std::string first_line = this->startup_lines_[this->startup_line_idx_++];
@@ -220,6 +342,7 @@ void SplitFlapDisplay::home(float speed, bool use_startup_string) {
 }
 
 void SplitFlapDisplay::home_to_string(const std::string &home_string, float speed) {
+  this->clear_pagination();
   if (speed < 0) {
     speed = this->max_vel_;
   }
@@ -295,10 +418,19 @@ void __attribute__((hot)) SplitFlapDisplay::loop() {
 
   switch (this->state_) {
     case STATE_IDLE:
-      if (this->startup_line_idx_ < this->startup_lines_.size()) {
+      if (this->paginated_line_idx_ < this->paginated_lines_.size()) {
+        if (now_ms - this->last_page_advance_time_ms_ >= this->current_page_interval_ms_) {
+          ESP_LOGD(TAG, "Displaying paginated line %zu/%zu: %s", this->paginated_line_idx_ + 1,
+                   this->paginated_lines_.size(), this->paginated_lines_[this->paginated_line_idx_].c_str());
+          this->last_page_advance_time_ms_ = now_ms;
+          this->write_page_internal(this->paginated_lines_[this->paginated_line_idx_++], this->paginated_speed_,
+                                  this->paginated_centering_);
+        }
+      } else if (this->startup_line_idx_ < this->startup_lines_.size()) {
         if (now_ms - this->state_timer_ >= 2000) {
-          ESP_LOGD(TAG, "Displaying startup sequence line %d: %s", (int) this->startup_line_idx_, this->startup_lines_[this->startup_line_idx_].c_str());
-          this->write_string(this->startup_lines_[this->startup_line_idx_++], -1.0f, true);
+          ESP_LOGD(TAG, "Displaying startup sequence line %d: %s", (int) this->startup_line_idx_,
+                   this->startup_lines_[this->startup_line_idx_].c_str());
+          this->write_page_internal(this->startup_lines_[this->startup_line_idx_++], -1.0f, true);
         }
       }
       break;
@@ -389,7 +521,7 @@ void __attribute__((hot)) SplitFlapDisplay::step_task_fn(void *param) {
         // Cold-path: Log calibration events
         for (const auto &event : this_display->calibration_events_) {
           if (event.triggered) {
-            ESP_LOGD(TAG, "Module %zu calibrated at magnet trailing edge (current pos: %d -> reset to %d, target: %d)", 
+            ESP_LOGD(TAG, "Module %zu calibrated at magnet trailing edge (current pos: %d -> reset to %d, target: %d)",
                      event.module_index, event.current_pos, event.reset_pos, event.target_pos);
           }
         }
@@ -419,7 +551,9 @@ void __attribute__((hot)) SplitFlapDisplay::step_task_fn(void *param) {
           for (size_t i = 0; i < this_display->modules_.size(); i++) {
             char current_char = this_display->pending_string_[i];
             int char_pos = this_display->modules_[i]->get_char_position(current_char);
-            this_display->target_positions_[i] = (char_pos - this_display->modules_[i]->get_step_offset() + this_display->steps_per_rot_) % this_display->steps_per_rot_;
+            this_display->target_positions_[i] =
+                (char_pos - this_display->modules_[i]->get_step_offset() + this_display->steps_per_rot_) %
+                this_display->steps_per_rot_;
             this_display->calibrated_this_move_[i] = false;
             this_display->was_magnet_present_[i] = false;
             this_display->calibration_events_[i].triggered = false;
@@ -443,7 +577,7 @@ void __attribute__((hot)) SplitFlapDisplay::step_task_fn(void *param) {
         unsigned long next_step_time = step_start_us + this_display->time_per_step_us_;
         while (micros() < next_step_time) {
           if (next_step_time - micros() >= 1500) {
-            vTaskDelay(pdMS_TO_TICKS(1)); // Yield 1 tick to let WiFi run
+            vTaskDelay(pdMS_TO_TICKS(1));  // Yield 1 tick to let WiFi run
           } else {
             // tight loop for remaining timing fraction
           }
@@ -457,7 +591,8 @@ void __attribute__((hot)) SplitFlapDisplay::step_task_fn(void *param) {
 }
 
 void SplitFlapDisplay::step_9_test() {
-  if (this->charset_.empty()) return;
+  if (this->charset_.empty())
+    return;
   char c = this->charset_[this->test_step_index_];
   std::string test_str(this->modules_.size(), c);
   this->write_string(test_str, -1.0f, false);
@@ -466,4 +601,3 @@ void SplitFlapDisplay::step_9_test() {
 
 }  // namespace split_flap
 }  // namespace esphome
-
