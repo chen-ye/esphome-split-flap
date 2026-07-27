@@ -17,6 +17,16 @@ logger:
 api:
   encryption:
     key: !secret home_assistant_key
+  services:
+    - service: write_paginated
+      variables:
+        value: string
+        page_time: float
+      then:
+        - split_flap.write_paginated:
+            id: split_flap_display
+            value: !lambda 'return value;'
+            page_time: !lambda 'return (uint32_t)(page_time * 1000.0f);'
 
 ota:
   - platform: esphome
