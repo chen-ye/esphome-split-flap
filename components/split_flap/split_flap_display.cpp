@@ -143,13 +143,7 @@ void SplitFlapDisplay::dump_config() {
   }
 }
 
-void SplitFlapDisplay::control(const std::string &value) {
-  if (value.find('\n') != std::string::npos) {
-    this->write_paginated(value);
-  } else {
-    this->write_string(value);
-  }
-}
+void SplitFlapDisplay::control(const std::string &value) { this->write_string(value); }
 
 void SplitFlapDisplay::write_string(const std::string &input_string, float speed, bool centering) {
   this->clear_pagination();
