@@ -7,17 +7,47 @@ namespace split_flap {
 
 static const char *const TAG = "split_flap.display";
 
+void SplitFlapPageTimeNumber::setup() {
+  float initial = this->initial_value_;
+  if (this->restore_value_) {
+    this->pref_ = global_preferences->make_preference<float>(this->get_object_id_hash());
+    float value;
+    if (this->pref_.load(&value)) {
+      initial = value;
+    }
+  }
+  this->publish_state(initial);
+  if (this->parent_ != nullptr) {
+    this->parent_->set_page_time((uint32_t) (initial * 1000.0f));
+  }
+}
+
 void SplitFlapPageTimeNumber::control(float value) {
   this->publish_state(value);
+  if (this->restore_value_) {
+    this->pref_.save(&value);
+  }
   if (this->parent_ != nullptr) {
     this->parent_->set_page_time((uint32_t) (value * 1000.0f));
   }
 }
 
+void SplitFlapModuleOffsetNumber::setup() {
+  float initial = this->initial_value_;
+  if (this->restore_value_) {
+    this->pref_ = global_preferences->make_preference<float>(this->get_object_id_hash());
+    float value;
+    if (this->pref_.load(&value)) {
+      initial = value;
+    }
+  }
+  this->publish_state(initial);
+}
+
 void SplitFlapModuleOffsetNumber::control(float value) {
   this->publish_state(value);
-  if (this->parent_ != nullptr) {
-    this->parent_->add_module_offset_number(this->module_index_, this);
+  if (this->restore_value_) {
+    this->pref_.save(&value);
   }
 }
 

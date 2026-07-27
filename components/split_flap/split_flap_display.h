@@ -4,6 +4,7 @@
 #include "esphome/core/automation.h"
 #include "esphome/components/text/text.h"
 #include "esphome/components/i2c/i2c.h"
+#include "esphome/core/preferences.h"
 #include "split_flap_module.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -21,10 +22,16 @@ class SplitFlapPageTimeNumber : public number::Number, public Component {
  public:
   SplitFlapPageTimeNumber() = default;
   void set_parent(SplitFlapDisplay *parent) { this->parent_ = parent; }
+  void set_initial_value(float value) { this->initial_value_ = value; }
+  void set_restore_value(bool restore) { this->restore_value_ = restore; }
+  void setup() override;
 
  protected:
   void control(float value) override;
   SplitFlapDisplay *parent_{nullptr};
+  float initial_value_{3.0f};
+  bool restore_value_{true};
+  ESPPreferenceObject pref_;
 };
 
 class SplitFlapModuleOffsetNumber : public number::Number, public Component {
@@ -32,11 +39,17 @@ class SplitFlapModuleOffsetNumber : public number::Number, public Component {
   SplitFlapModuleOffsetNumber() = default;
   void set_parent(SplitFlapDisplay *parent) { this->parent_ = parent; }
   void set_module_index(size_t index) { this->module_index_ = index; }
+  void set_initial_value(float value) { this->initial_value_ = value; }
+  void set_restore_value(bool restore) { this->restore_value_ = restore; }
+  void setup() override;
 
  protected:
   void control(float value) override;
   SplitFlapDisplay *parent_{nullptr};
   size_t module_index_{0};
+  float initial_value_{0.0f};
+  bool restore_value_{true};
+  ESPPreferenceObject pref_;
 };
 
 class SplitFlapDisplay : public Component, public text::Text {
