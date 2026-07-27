@@ -226,6 +226,53 @@ on_press:
       id: split_flap_display
 ```
 
+## Home Assistant Automation Examples
+
+When connected via the Home Assistant API, ESPHome automatically registers native actions/services for custom actions defined on the device.
+
+Action names follow the pattern `esphome.<device_name>_<action_name>` (e.g. `esphome.esphome_splitflap1_write_paginated`).
+
+### 1. Paginated Write Action
+
+```yaml
+alias: "Display Morning Message"
+trigger:
+  - platform: time
+    at: "08:00:00"
+action:
+  - action: esphome.esphome_splitflap1_write_paginated
+    data:
+      value: |
+        GOOD MORNING
+        CURRENT TEMP 72F
+        FLIGHT 102 ON TIME
+      page_time: 4s
+```
+
+### 2. Standard Text Entity Update
+
+For single lines or short text, you can also use the standard `text.set_value` action:
+
+```yaml
+action: text.set_value
+target:
+  entity_id: text.display_text
+data:
+  value: "HELLO"
+```
+
+### 3. Adjusting Page Advance Time
+
+Dynamic `number` entities (like `page_time` or module calibration offsets) can be controlled directly via `number.set_value`:
+
+```yaml
+action: number.set_value
+target:
+  entity_id: number.page_advance_time
+data:
+  value: 5
+```
+
 ## Firmware Architecture
 
 - **Dedicated FreeRTOS Task**: Runs motor stepping sequences in a high-priority task (Priority 24) on Core 0 with hybrid busy-wait/yielding, mitigating timing jitter caused by ESPHome's main loop and WiFi network stack.
