@@ -110,28 +110,34 @@ text:
   - Length `>= 48`: Defaults to the extended 48-character set (`ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789':/?!.->$#%`).
 - **home_on_startup** (*Optional*, boolean): Whether to home the display immediately upon boot. Defaults to `true`.
 - **startup_string** (*Optional*, string): Multi-line string. If provided, lines are displayed sequentially on the display (2 seconds per line) after a boot/homing sequence finishes.
+- **page_time** (*Optional*, time duration or number entity ID): The default page advance time for paginated writes (e.g. `3s`). Can also reference an ESPHome `number` entity ID. Defaults to `3s`.
 - **modules** (**Required**, list): The list of split-flap modules from left to right.
   - **address** (**Required**, I2C address): The I2C address of the PCF8575 for this module (e.g., `0x20`).
   - **offset** (*Optional*, integer or template number ID): The calibration offset for this module. Referencing an ESPHome `number` entity allows you to dynamically change offsets via the UI without rebuilding the firmware. Defaults to `0`.
 
-## Calibration Offset Tuning
+## Native Number Entities
 
-Because of physical tolerances and magnet placements, each module will require slight step calibration to ensure flaps align perfectly flat in the window.
-
-To make this easy, map the `offset` parameter of each module to an ESPHome `template number` entity:
+The component provides a native `number` platform (`platform: split_flap`) to control default page advance time and per-module calibration offsets directly from Home Assistant or the ESPHome web interface.
 
 ```yaml
 number:
-  - platform: template
-    id: offset_0
+  - platform: split_flap
+    type: page_time
+    split_flap_id: split_flap_display
+    name: "Page Advance Time"
+    initial_value: 3.0s
+
+  - platform: split_flap
+    type: module_offset
+    split_flap_id: split_flap_display
+    module_index: 0
     name: "Module 0 Offset"
-    min_value: -100
-    max_value: 100
-    step: 1
     initial_value: 0
-    optimistic: true
-    restore_value: true
 ```
+
+### Calibration Offset Tuning
+
+Because of physical tolerances and magnet placements, each module will require slight step calibration to ensure flaps align perfectly flat in the window.
 
 Use the following cheatsheet to calibrate your modules:
 
@@ -161,6 +167,28 @@ on_press:
 - **value** (**Required**, string, templatable): The text to display.
 - **speed** (*Optional*, float, templatable): Driving speed in RPM. If omitted, uses `max_vel`.
 - **centering** (*Optional*, boolean, templatable): Whether to center-align the text on the display. Defaults to `true`. If `false`, text is left-aligned and padded with spaces on the right.
+
+### `split_flap.write_paginated`
+
+Writes a multi-line string to the display, splitting by newlines (`\n`) and word-wrapping long lines across display modules. Pages automatically cycle according to `page_time`.
+
+```yaml
+on_press:
+  - split_flap.write_paginated:
+      id: split_flap_display
+      value: |
+        WELCOME TO THE
+        SPLIT FLAP DISPLAY
+      page_time: 3s
+      speed: 15.0
+      centering: true
+```
+
+- **id** (**Required**, ID): The ID of the split-flap display.
+- **value** (**Required**, string, templatable): The multi-line text to display and paginate.
+- **page_time** (*Optional*, time duration, templatable): Time to pause on each page before advancing to the next. If omitted, uses the display's default `page_time`.
+- **speed** (*Optional*, float, templatable): Driving speed in RPM. If omitted, uses `max_vel`.
+- **centering** (*Optional*, boolean, templatable): Whether to center-align each page on the display. Defaults to `true`.
 
 ### `split_flap.home`
 
