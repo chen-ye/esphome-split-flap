@@ -115,9 +115,9 @@ text:
   - **address** (**Required**, I2C address): The I2C address of the PCF8575 for this module (e.g., `0x20`).
   - **offset** (*Optional*, integer or template number ID): The calibration offset for this module. Referencing an ESPHome `number` entity allows you to dynamically change offsets via the UI without rebuilding the firmware. Defaults to `0`.
 
-## Native Number Entities
+## Config Entities
 
-The component provides a native `number` platform (`platform: split_flap`) to control default page advance time and per-module calibration offsets directly from Home Assistant or the ESPHome web interface.
+The component provides a native `number` platform (`platform: split_flap`) to dynamically control default page advance time and per-module calibration offsets directly from Home Assistant or the ESPHome web interface.
 
 ```yaml
 number:
