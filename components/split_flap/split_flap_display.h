@@ -163,7 +163,7 @@ template<typename... Ts> class WriteStringAction : public Action<Ts...>, public 
   TEMPLATABLE_VALUE(float, speed)
   TEMPLATABLE_VALUE(bool, centering)
 
-  void play(Ts... x) override {
+  void play(const Ts &... x) override {
     auto val = this->value_.value(x...);
     float spd = this->speed_.has_value() ? this->speed_.value(x...) : -1.0f;
     bool cent = this->centering_.has_value() ? this->centering_.value(x...) : true;
@@ -178,7 +178,7 @@ template<typename... Ts> class WritePaginatedAction : public Action<Ts...>, publ
   TEMPLATABLE_VALUE(float, speed)
   TEMPLATABLE_VALUE(bool, centering)
 
-  void play(Ts... x) override {
+  void play(const Ts &... x) override {
     auto val = this->value_.value(x...);
     int32_t page_tm = this->page_time_.has_value() ? (int32_t) this->page_time_.value(x...) : -1;
     float spd = this->speed_.has_value() ? this->speed_.value(x...) : -1.0f;
@@ -191,7 +191,7 @@ template<typename... Ts> class HomeAction : public Action<Ts...>, public Parente
  public:
   TEMPLATABLE_VALUE(float, speed)
 
-  void play(Ts... x) override {
+  void play(const Ts &... x) override {
     float spd = this->speed_.has_value() ? this->speed_.value(x...) : -1.0f;
     this->parent_->home(spd);
   }
@@ -202,7 +202,7 @@ template<typename... Ts> class HomeToStringAction : public Action<Ts...>, public
   TEMPLATABLE_VALUE(std::string, value)
   TEMPLATABLE_VALUE(float, speed)
 
-  void play(Ts... x) override {
+  void play(const Ts &... x) override {
     auto val = this->value_.value(x...);
     float spd = this->speed_.has_value() ? this->speed_.value(x...) : -1.0f;
     this->parent_->home_to_string(val, spd);
@@ -211,7 +211,7 @@ template<typename... Ts> class HomeToStringAction : public Action<Ts...>, public
 
 template<typename... Ts> class Step9TestAction : public Action<Ts...>, public Parented<SplitFlapDisplay> {
  public:
-  void play(Ts... x) override { this->parent_->step_9_test(); }
+  void play(const Ts &... x) override { this->parent_->step_9_test(); }
 };
 
 }  // namespace split_flap
