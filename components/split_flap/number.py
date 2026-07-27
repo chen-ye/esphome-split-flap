@@ -1,7 +1,7 @@
 import esphome.codegen as cg
 from esphome.components import number
 import esphome.config_validation as cv
-from esphome.const import CONF_TYPE, UNIT_SECOND
+from esphome.const import CONF_TYPE, ENTITY_CATEGORY_CONFIG, UNIT_SECOND
 
 from . import split_flap_ns
 
@@ -26,6 +26,8 @@ CONFIG_SCHEMA = cv.typed_schema(
         TYPE_PAGE_TIME: number.number_schema(
             SplitFlapPageTimeNumber,
             unit_of_measurement=UNIT_SECOND,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:timer-sand",
         )
         .extend(
             {
@@ -37,6 +39,8 @@ CONFIG_SCHEMA = cv.typed_schema(
         .extend(cv.COMPONENT_SCHEMA),
         TYPE_MODULE_OFFSET: number.number_schema(
             SplitFlapModuleOffsetNumber,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:tune",
         )
         .extend(
             {
