@@ -64,6 +64,26 @@ external_components:
     components: [ split_flap ]
 ```
 
+#### Home Assistant API & Services
+
+To expose custom actions like `write_paginated` directly to Home Assistant as native actions/services:
+
+```yaml
+api:
+  encryption:
+    key: !secret home_assistant_key
+  services:
+    - service: write_paginated
+      variables:
+        value: string
+        page_time: float
+      then:
+        - split_flap.write_paginated:
+            id: split_flap_display
+            value: !lambda 'return value;'
+            page_time: !lambda 'return (uint32_t)(page_time * 1000.0f);'
+```
+
 #### Split-Flap Text Platform
 
 The component exposes itself as an ESPHome `text` component platform.
@@ -92,9 +112,7 @@ text:
     # Module Definitions
     modules:
       - address: 0x20
-        offset: offset_0
       - address: 0x21
-        offset: offset_1
 ```
 
 #### Config Variables
@@ -110,14 +128,13 @@ text:
   - Length `>= 48`: Defaults to the extended 48-character set (`ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789':/?!.->$#%`).
 - **home_on_startup** (*Optional*, boolean): Whether to home the display immediately upon boot. Defaults to `true`.
 - **startup_string** (*Optional*, string): Multi-line string. If provided, lines are displayed sequentially on the display (2 seconds per line) after a boot/homing sequence finishes.
-- **page_time** (*Optional*, time duration or number entity ID): The default page advance time for paginated writes (e.g. `3s`). Can also reference an ESPHome `number` entity ID. Defaults to `3s`.
 - **modules** (**Required**, list): The list of split-flap modules from left to right.
   - **address** (**Required**, I2C address): The I2C address of the PCF8575 for this module (e.g., `0x20`).
-  - **offset** (*Optional*, integer or template number ID): The calibration offset for this module. Referencing an ESPHome `number` entity allows you to dynamically change offsets via the UI without rebuilding the firmware. Defaults to `0`.
+  - **offset** (*Optional*, integer): Default static calibration offset for this module (if not using dynamic `number.split_flap` entities). Defaults to `0`.
 
 ## Config Entities
 
-The component provides a native `number` platform (`platform: split_flap`) to dynamically control default page advance time and per-module calibration offsets directly from Home Assistant or the ESPHome web interface.
+The component provides a native `number` platform (`platform: split_flap`) to dynamically control default page advance time and per-module calibration offsets directly from Home Assistant or the ESPHome web interface with NVS state persistence.
 
 ```yaml
 number:
@@ -125,7 +142,7 @@ number:
     type: page_time
     split_flap_id: split_flap_display
     name: "Page Advance Time"
-    initial_value: 3.0s
+    initial_value: 3s
 
   - platform: split_flap
     type: module_offset
