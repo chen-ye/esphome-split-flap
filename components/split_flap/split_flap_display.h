@@ -67,6 +67,11 @@ class SplitFlapDisplay : public Component, public text::Text {
   // Configurations
   void set_i2c_bus(i2c::I2CBus *bus) { this->bus_ = bus; }
   void set_steps_per_rot(int steps) { this->steps_per_rot_ = steps; }
+  struct PaginatedPage {
+    std::string text;
+    bool is_newline_end{false};
+  };
+
   void set_magnet_position(int pos) { this->magnet_position_ = pos; }
   void set_display_offset(int offset) { this->display_offset_ = offset; }
   void set_max_vel(float max_vel) { this->max_vel_ = max_vel; }
@@ -75,17 +80,20 @@ class SplitFlapDisplay : public Component, public text::Text {
   void set_startup_string(const std::string &startup_string);
   void set_page_time(uint32_t ms) { this->default_page_time_ms_ = ms; }
   void set_page_time_number(number::Number *num) { this->page_time_number_ = num; }
+  void set_newline_page_time(uint32_t ms) { this->default_newline_page_time_ms_ = ms; }
+  void set_newline_page_time_number(number::Number *num) { this->newline_page_time_number_ = num; }
 
   void add_module(uint8_t address, int offset);
   void add_module(uint8_t address, number::Number *offset_number);
   void add_module_offset_number(size_t index, number::Number *offset_number);
 
   uint32_t get_page_time_ms() const;
+  uint32_t get_newline_page_time_ms() const;
 
   // Operational methods
   void write_string(const std::string &input_string, float speed = -1.0f, bool centering = true);
-  void write_paginated(const std::string &input_string, int32_t page_time_ms = -1, float speed = -1.0f,
-                       bool centering = true);
+  void write_paginated(const std::string &input_string, int32_t page_time_ms = -1, int32_t newline_page_time_ms = -1,
+                       float speed = -1.0f, bool centering = true);
   void clear_pagination();
   void home(float speed = -1.0f, bool use_startup_string = false);
   void home_to_string(const std::string &home_string, float speed = -1.0f);
@@ -110,9 +118,12 @@ class SplitFlapDisplay : public Component, public text::Text {
 
   number::Number *page_time_number_{nullptr};
   uint32_t default_page_time_ms_{3000};
-  std::vector<std::string> paginated_lines_;
+  number::Number *newline_page_time_number_{nullptr};
+  uint32_t default_newline_page_time_ms_{3000};
+  std::vector<PaginatedPage> paginated_lines_;
   size_t paginated_line_idx_{0};
-  uint32_t current_page_interval_ms_{3000};
+  uint32_t current_same_line_page_interval_ms_{3000};
+  uint32_t current_newline_page_interval_ms_{3000};
   unsigned long last_page_advance_time_ms_{0};
   float paginated_speed_{-1.0f};
   bool paginated_centering_{true};
@@ -175,15 +186,17 @@ template<typename... Ts> class WritePaginatedAction : public Action<Ts...>, publ
  public:
   TEMPLATABLE_VALUE(std::string, value)
   TEMPLATABLE_VALUE(uint32_t, page_time)
+  TEMPLATABLE_VALUE(uint32_t, newline_page_time)
   TEMPLATABLE_VALUE(float, speed)
   TEMPLATABLE_VALUE(bool, centering)
 
   void play(const Ts &... x) override {
     auto val = this->value_.value(x...);
     int32_t page_tm = this->page_time_.has_value() ? (int32_t) this->page_time_.value(x...) : -1;
+    int32_t nl_page_tm = this->newline_page_time_.has_value() ? (int32_t) this->newline_page_time_.value(x...) : -1;
     float spd = this->speed_.has_value() ? this->speed_.value(x...) : -1.0f;
     bool cent = this->centering_.has_value() ? this->centering_.value(x...) : true;
-    this->parent_->write_paginated(val, page_tm, spd, cent);
+    this->parent_->write_paginated(val, page_tm, nl_page_tm, spd, cent);
   }
 };
 

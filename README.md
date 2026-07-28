@@ -145,6 +145,12 @@ number:
     initial_value: 3s
 
   - platform: split_flap
+    type: newline_page_time
+    split_flap_id: split_flap_display
+    name: "Newline Page Advance Time"
+    initial_value: 3s
+
+  - platform: split_flap
     type: module_offset
     split_flap_id: split_flap_display
     module_index: 0
@@ -187,7 +193,7 @@ on_press:
 
 ### `split_flap.write_paginated`
 
-Writes a multi-line string to the display, splitting by newlines (`\n`) and word-wrapping long lines across display modules. Pages automatically cycle according to `page_time`.
+Writes a multi-line string to the display, splitting by newlines (`\n`) and word-wrapping long lines across display modules (with smart hyphenation and auto-hyphenation for long words). Pages automatically cycle according to `page_time` (same-line wrapped pages) and `newline_page_time` (pages at explicit line breaks).
 
 ```yaml
 on_press:
@@ -197,13 +203,15 @@ on_press:
         WELCOME TO THE
         SPLIT FLAP DISPLAY
       page_time: 3s
+      newline_page_time: 5s
       speed: 15.0
       centering: true
 ```
 
 - **id** (**Required**, ID): The ID of the split-flap display.
 - **value** (**Required**, string, templatable): The multi-line text to display and paginate.
-- **page_time** (*Optional*, time duration, templatable): Time to pause on each page before advancing to the next. If omitted, uses the display's default `page_time`.
+- **page_time** (*Optional*, time duration, templatable): Time to pause after wrapped pages within the same line. If omitted, uses the display's default `page_time`.
+- **newline_page_time** (*Optional*, time duration, templatable): Time to pause after the final page of a line before advancing across an explicit newline. If omitted, defaults to `page_time` or the display's `newline_page_time`.
 - **speed** (*Optional*, float, templatable): Driving speed in RPM. If omitted, uses `max_vel`.
 - **centering** (*Optional*, boolean, templatable): Whether to center-align each page on the display. Defaults to `true`.
 

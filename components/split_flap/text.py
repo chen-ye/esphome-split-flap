@@ -31,6 +31,7 @@ CONF_ADDRESS = "address"
 CONF_SPEED = "speed"
 CONF_CENTERING = "centering"
 CONF_PAGE_TIME = "page_time"
+CONF_NEWLINE_PAGE_TIME = "newline_page_time"
 
 MODULE_SCHEMA = cv.Schema(
     {
@@ -55,6 +56,9 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_HOME_ON_STARTUP, default=True): cv.boolean,
             cv.Optional(CONF_STARTUP_STRING, default=""): cv.string,
             cv.Optional(CONF_PAGE_TIME): cv.Any(
+                cv.positive_time_period_milliseconds, cv.use_id(number.Number)
+            ),
+            cv.Optional(CONF_NEWLINE_PAGE_TIME): cv.Any(
                 cv.positive_time_period_milliseconds, cv.use_id(number.Number)
             ),
             cv.Required(CONF_MODULES): cv.ensure_list(MODULE_SCHEMA),
@@ -88,6 +92,13 @@ async def to_code(config):
         else:
             page_time_var = await cg.get_variable(page_time)
             cg.add(var.set_page_time_number(page_time_var))
+
+    if (newline_page_time := config.get(CONF_NEWLINE_PAGE_TIME)) is not None:
+        if isinstance(newline_page_time, int):
+            cg.add(var.set_newline_page_time(newline_page_time))
+        else:
+            newline_page_time_var = await cg.get_variable(newline_page_time)
+            cg.add(var.set_newline_page_time_number(newline_page_time_var))
 
     # Add each module configuration
     for module_conf in config[CONF_MODULES]:
@@ -135,6 +146,9 @@ async def split_flap_write_to_code(config, action_id, template_arg, args):
             cv.Required(CONF_ID): cv.use_id(SplitFlapDisplay),
             cv.Required(CONF_VALUE): cv.templatable(cv.string),
             cv.Optional(CONF_PAGE_TIME): cv.templatable(cv.positive_time_period_milliseconds),
+            cv.Optional(CONF_NEWLINE_PAGE_TIME): cv.templatable(
+                cv.positive_time_period_milliseconds
+            ),
             cv.Optional(CONF_SPEED): cv.templatable(cv.positive_float),
             cv.Optional(CONF_CENTERING): cv.templatable(cv.boolean),
         }
@@ -149,6 +163,9 @@ async def split_flap_write_paginated_to_code(config, action_id, template_arg, ar
     if (page_time := config.get(CONF_PAGE_TIME)) is not None:
         template_ = await cg.templatable(page_time, args, cg.uint32)
         cg.add(var.set_page_time(template_))
+    if (newline_page_time := config.get(CONF_NEWLINE_PAGE_TIME)) is not None:
+        template_ = await cg.templatable(newline_page_time, args, cg.uint32)
+        cg.add(var.set_newline_page_time(template_))
     if (speed := config.get(CONF_SPEED)) is not None:
         template_ = await cg.templatable(speed, args, cg.float_)
         cg.add(var.set_speed(template_))

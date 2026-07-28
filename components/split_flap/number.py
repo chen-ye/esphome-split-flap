@@ -19,11 +19,26 @@ CONF_MODULE_INDEX = "module_index"
 CONF_INITIAL_VALUE = "initial_value"
 CONF_RESTORE_VALUE = "restore_value"
 TYPE_PAGE_TIME = "page_time"
+TYPE_NEWLINE_PAGE_TIME = "newline_page_time"
 TYPE_MODULE_OFFSET = "module_offset"
 
 CONFIG_SCHEMA = cv.typed_schema(
     {
         TYPE_PAGE_TIME: number.number_schema(
+            SplitFlapPageTimeNumber,
+            unit_of_measurement=UNIT_SECOND,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:timer-sand",
+        )
+        .extend(
+            {
+                cv.Required(CONF_SPLIT_FLAP_ID): cv.use_id(SplitFlapDisplay),
+                cv.Optional(CONF_INITIAL_VALUE, default=3.0): cv.positive_time_period_seconds,
+                cv.Optional(CONF_RESTORE_VALUE, default=True): cv.boolean,
+            }
+        )
+        .extend(cv.COMPONENT_SCHEMA),
+        TYPE_NEWLINE_PAGE_TIME: number.number_schema(
             SplitFlapPageTimeNumber,
             unit_of_measurement=UNIT_SECOND,
             entity_category=ENTITY_CATEGORY_CONFIG,
@@ -70,6 +85,18 @@ async def to_code(config):
         cg.add(var.set_initial_value(config[CONF_INITIAL_VALUE]))
         cg.add(var.set_restore_value(config[CONF_RESTORE_VALUE]))
         cg.add(parent.set_page_time_number(var))
+    elif config[CONF_TYPE] == TYPE_NEWLINE_PAGE_TIME:
+        var = await number.new_number(
+            config,
+            min_value=1.0,
+            max_value=60.0,
+            step=0.5,
+        )
+        await cg.register_component(var, config)
+        cg.add(var.set_parent(parent))
+        cg.add(var.set_initial_value(config[CONF_INITIAL_VALUE]))
+        cg.add(var.set_restore_value(config[CONF_RESTORE_VALUE]))
+        cg.add(parent.set_newline_page_time_number(var))
     elif config[CONF_TYPE] == TYPE_MODULE_OFFSET:
         var = await number.new_number(
             config,
@@ -83,3 +110,4 @@ async def to_code(config):
         cg.add(var.set_initial_value(config[CONF_INITIAL_VALUE]))
         cg.add(var.set_restore_value(config[CONF_RESTORE_VALUE]))
         cg.add(parent.add_module_offset_number(config[CONF_MODULE_INDEX], var))
+

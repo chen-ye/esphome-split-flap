@@ -70,6 +70,13 @@ uint32_t SplitFlapDisplay::get_page_time_ms() const {
   return this->default_page_time_ms_;
 }
 
+uint32_t SplitFlapDisplay::get_newline_page_time_ms() const {
+  if (this->newline_page_time_number_ != nullptr && !std::isnan(this->newline_page_time_number_->state)) {
+    return (uint32_t) (this->newline_page_time_number_->state * 1000.0f);
+  }
+  return this->default_newline_page_time_ms_;
+}
+
 void SplitFlapDisplay::clear_pagination() {
   this->paginated_lines_.clear();
   this->paginated_line_idx_ = 0;
@@ -223,10 +230,52 @@ void SplitFlapDisplay::write_page_internal(const std::string &input_string, floa
   }
 }
 
-void SplitFlapDisplay::write_paginated(const std::string &input_string, int32_t page_time_ms, float speed,
-                                       bool centering) {
+struct Token {
+  std::string text;
+  bool ends_with_hyphen{false};
+};
+
+static std::vector<Token> tokenize_word(const std::string &word) {
+  std::vector<Token> tokens;
+  if (word.empty())
+    return tokens;
+
+  bool all_hyphens = true;
+  for (char c : word) {
+    if (c != '-') {
+      all_hyphens = false;
+      break;
+    }
+  }
+  if (all_hyphens) {
+    tokens.push_back({word, false});
+    return tokens;
+  }
+
+  size_t start = 0;
+  for (size_t i = 0; i < word.length(); i++) {
+    if (word[i] == '-' && i < word.length() - 1) {
+      tokens.push_back({word.substr(start, i - start + 1), true});
+      start = i + 1;
+    }
+  }
+  if (start < word.length()) {
+    tokens.push_back({word.substr(start), false});
+  }
+  return tokens;
+}
+
+void SplitFlapDisplay::write_paginated(const std::string &input_string, int32_t page_time_ms,
+                                       int32_t newline_page_time_ms, float speed, bool centering) {
   this->clear_pagination();
-  this->current_page_interval_ms_ = page_time_ms >= 0 ? (uint32_t) page_time_ms : this->get_page_time_ms();
+  this->current_same_line_page_interval_ms_ = page_time_ms >= 0 ? (uint32_t) page_time_ms : this->get_page_time_ms();
+  if (newline_page_time_ms >= 0) {
+    this->current_newline_page_interval_ms_ = (uint32_t) newline_page_time_ms;
+  } else if (page_time_ms >= 0 && this->newline_page_time_number_ == nullptr) {
+    this->current_newline_page_interval_ms_ = (uint32_t) page_time_ms;
+  } else {
+    this->current_newline_page_interval_ms_ = this->get_newline_page_time_ms();
+  }
   this->paginated_speed_ = speed;
   this->paginated_centering_ = centering;
 
@@ -259,41 +308,72 @@ void SplitFlapDisplay::write_paginated(const std::string &input_string, int32_t 
   // Wrap or split each line based on module_count
   for (const auto &raw_line : raw_lines) {
     if (raw_line.length() <= module_count) {
-      this->paginated_lines_.push_back(raw_line);
+      this->paginated_lines_.push_back({raw_line, true});
       continue;
     }
 
     std::stringstream ss(raw_line);
     std::string word;
+    std::vector<PaginatedPage> line_pages;
     std::string current_page = "";
+    bool prev_token_ended_with_hyphen = false;
 
     while (ss >> word) {
-      if (word.length() > module_count) {
-        if (!current_page.empty()) {
-          this->paginated_lines_.push_back(current_page);
-          current_page = "";
-        }
-        for (size_t i = 0; i < word.length(); i += module_count) {
-          std::string chunk = word.substr(i, module_count);
-          if (chunk.length() == module_count) {
-            this->paginated_lines_.push_back(chunk);
+      std::vector<Token> word_tokens = tokenize_word(word);
+      for (auto &tok : word_tokens) {
+        // Handle tokens longer than module_count (auto-hyphenate long words)
+        while (tok.text.length() > module_count) {
+          if (!current_page.empty()) {
+            line_pages.push_back({current_page, false});
+            current_page = "";
+            prev_token_ended_with_hyphen = false;
+          }
+          if (module_count > 1) {
+            size_t chunk_len = module_count - 1;
+            std::string chunk = tok.text.substr(0, chunk_len) + "-";
+            line_pages.push_back({chunk, false});
+            tok.text = tok.text.substr(chunk_len);
           } else {
-            current_page = chunk;
+            std::string chunk = tok.text.substr(0, 1);
+            line_pages.push_back({chunk, false});
+            tok.text = tok.text.substr(1);
           }
         }
-      } else {
+
+        if (tok.text.empty()) {
+          continue;
+        }
+
+        std::string candidate;
         if (current_page.empty()) {
-          current_page = word;
-        } else if (current_page.length() + 1 + word.length() <= module_count) {
-          current_page += " " + word;
+          candidate = tok.text;
+        } else if (prev_token_ended_with_hyphen) {
+          candidate = current_page + tok.text;
         } else {
-          this->paginated_lines_.push_back(current_page);
-          current_page = word;
+          candidate = current_page + " " + tok.text;
+        }
+
+        if (candidate.length() <= module_count) {
+          current_page = candidate;
+          prev_token_ended_with_hyphen = tok.ends_with_hyphen;
+        } else {
+          if (!current_page.empty()) {
+            line_pages.push_back({current_page, false});
+          }
+          current_page = tok.text;
+          prev_token_ended_with_hyphen = tok.ends_with_hyphen;
         }
       }
     }
     if (!current_page.empty()) {
-      this->paginated_lines_.push_back(current_page);
+      line_pages.push_back({current_page, false});
+    }
+
+    if (!line_pages.empty()) {
+      line_pages.back().is_newline_end = true;
+      for (const auto &p : line_pages) {
+        this->paginated_lines_.push_back(p);
+      }
     }
   }
 
@@ -301,12 +381,13 @@ void SplitFlapDisplay::write_paginated(const std::string &input_string, int32_t 
     return;
   }
 
-  this->write_page_internal(this->paginated_lines_[0], speed, centering);
+  this->write_page_internal(this->paginated_lines_[0].text, speed, centering);
   this->paginated_line_idx_ = 1;
   this->last_page_advance_time_ms_ = millis();
 }
 
 void SplitFlapDisplay::home(float speed, bool use_startup_string) {
+
   this->clear_pagination();
   if (speed < 0) {
     speed = this->max_vel_;
@@ -449,12 +530,15 @@ void __attribute__((hot)) SplitFlapDisplay::loop() {
   switch (this->state_) {
     case STATE_IDLE:
       if (this->paginated_line_idx_ < this->paginated_lines_.size()) {
-        if (now_ms - this->last_page_advance_time_ms_ >= this->current_page_interval_ms_) {
+        uint32_t interval = this->paginated_lines_[this->paginated_line_idx_ - 1].is_newline_end
+                                ? this->current_newline_page_interval_ms_
+                                : this->current_same_line_page_interval_ms_;
+        if (now_ms - this->last_page_advance_time_ms_ >= interval) {
           ESP_LOGD(TAG, "Displaying paginated line %zu/%zu: %s", this->paginated_line_idx_ + 1,
-                   this->paginated_lines_.size(), this->paginated_lines_[this->paginated_line_idx_].c_str());
+                   this->paginated_lines_.size(), this->paginated_lines_[this->paginated_line_idx_].text.c_str());
           this->last_page_advance_time_ms_ = now_ms;
-          this->write_page_internal(this->paginated_lines_[this->paginated_line_idx_++], this->paginated_speed_,
-                                  this->paginated_centering_);
+          this->write_page_internal(this->paginated_lines_[this->paginated_line_idx_++].text, this->paginated_speed_,
+                                    this->paginated_centering_);
         }
       } else if (this->startup_line_idx_ < this->startup_lines_.size()) {
         if (now_ms - this->state_timer_ >= 2000) {

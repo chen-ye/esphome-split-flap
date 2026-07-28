@@ -22,11 +22,13 @@ api:
       variables:
         value: string
         page_time: float
+        newline_page_time: float
       then:
         - split_flap.write_paginated:
             id: split_flap_display
             value: !lambda 'return value;'
-            page_time: !lambda 'return (uint32_t)(page_time * 1000.0f);'
+            page_time: !lambda 'return page_time > 0 ? (uint32_t)(page_time * 1000.0f) : 0;'
+            newline_page_time: !lambda 'return newline_page_time > 0 ? (uint32_t)(newline_page_time * 1000.0f) : 0;'
 
 ota:
   - platform: esphome
@@ -98,6 +100,12 @@ number:
     type: page_time
     split_flap_id: split_flap_display
     name: "Page Advance Time"
+    initial_value: 3.0s
+
+  - platform: split_flap
+    type: newline_page_time
+    split_flap_id: split_flap_display
+    name: "Newline Page Advance Time"
     initial_value: 3.0s
 
   - platform: split_flap
